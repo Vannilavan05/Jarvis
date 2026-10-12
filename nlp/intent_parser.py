@@ -295,8 +295,11 @@ class IntentParser:
             return None
         try:
             allowed = self.command_registry.all_intents() if self.command_registry is not None else {}
-            history = self.assistant_memory.recent_messages("default", limit=8) if self.assistant_memory is not None else []
-            result = self.llm_router.interpret(normalized, history=history)
+            if self.assistant_memory is not None:
+                history = self.assistant_memory.recent_messages("default", limit=8)
+                result = self.llm_router.interpret(normalized, history=history)
+            else:
+                result = self.llm_router.interpret(normalized)
             # Do not let the model invent dictated text or an application/control target.
             if result.mode == "action_request" and result.intent == "type_text":
                 spoken_text = raw_text.strip()
