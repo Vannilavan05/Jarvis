@@ -13,10 +13,10 @@
   "nlp_confidence_threshold": 0.65,
   "confirmation_timeout_seconds": 30,
   "allowed_file_directories": [
-    "C:\\Users\\CSE LAB 2\\jarvis\\data",
-    "C:\\Users\\CSE LAB 2\\Documents",
-    "C:\\Users\\CSE LAB 2\\Downloads",
-    "C:\\Users\\CSE LAB 2\\Desktop"
+    "data",
+    "~/Documents",
+    "~/Downloads",
+    "~/Desktop"
   ],
   "tts_rate": 180,
   "tts_volume": 1,
