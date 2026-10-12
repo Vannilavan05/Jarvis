@@ -102,6 +102,7 @@ def initialize_system():
         confidence_threshold=confidence_thresh,
         llm_router=llm_router,
         command_registry=cmd_registry,
+        assistant_memory=assistant_memory,
     )
 
     # 5. Security & Confirmation
