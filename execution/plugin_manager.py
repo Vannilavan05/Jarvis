@@ -1,12 +1,12 @@
 """Plugin Manager for Jarvis.
 Handles discovery, registration, allowlisting, and routing to execution plugins.
 """
-
 import logging
 from typing import Dict, List, Optional
 
 try:
     from plugins.applications import ApplicationPlugin
+    from plugins.assistant_memory import AssistantMemoryPlugin
     from plugins.base import BasePlugin
     from plugins.custom_commands import CustomCommandsPlugin
     from plugins.desktop_automation import DesktopAutomationPlugin
@@ -17,6 +17,7 @@ try:
     from plugins.web_search import WebSearchPlugin
 except (ImportError, ValueError):
     from jarvis.plugins.applications import ApplicationPlugin
+    from jarvis.plugins.assistant_memory import AssistantMemoryPlugin
     from jarvis.plugins.base import BasePlugin
     from jarvis.plugins.custom_commands import CustomCommandsPlugin
     from jarvis.plugins.desktop_automation import DesktopAutomationPlugin
@@ -39,27 +40,24 @@ class PluginManager:
         self._register_default_plugins()
 
     def register_plugin(self, plugin: BasePlugin):
-        """Registers a plugin and maps its supported intents."""
         self._plugins[plugin.plugin_id] = plugin
         if not self._enabled_ids or plugin.plugin_id in self._enabled_ids:
             for intent in plugin.supported_intents:
                 self._intent_map[intent] = plugin
-        logger.info(f"Registered plugin '{plugin.name}' (id: {plugin.plugin_id}, version: {plugin.version})")
+        logger.info("Registered plugin '%s' (id: %s, version: %s)", plugin.name, plugin.plugin_id, plugin.version)
 
     def get_plugin_for_intent(self, intent: str) -> Optional[BasePlugin]:
-        """Resolves which plugin handles the given intent."""
         return self._intent_map.get(intent)
 
     def is_plugin_enabled(self, plugin_id: str) -> bool:
-        if not self._enabled_ids:
-            return True
-        return plugin_id in self._enabled_ids
+        return not self._enabled_ids or plugin_id in self._enabled_ids
 
     def get_all_plugins(self) -> List[BasePlugin]:
         return list(self._plugins.values())
 
     def _register_default_plugins(self):
         self.register_plugin(ApplicationPlugin())
+        self.register_plugin(AssistantMemoryPlugin())
         self.register_plugin(DesktopAutomationPlugin())
         self.register_plugin(FilePlugin())
         self.register_plugin(WebSearchPlugin())
