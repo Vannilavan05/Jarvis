@@ -35,5 +35,9 @@ jobs:
           execution/dispatcher.py
           security/confirmation_manager.py
           security/authentication.py
+          plugins/applications.py
+          plugins/desktop_automation.py
+          execution/command_registry.py
+          execution/plugin_manager.py
       - name: Run local LLM and security tests
-        run: python -m pytest -q tests/test_local_llm.py tests/test_security_hardening.py
+        run: python -m pytest -q tests/test_local_llm.py tests/test_security_hardening.py tests/test_plugins.py
