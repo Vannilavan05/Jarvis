@@ -146,6 +146,15 @@ class IntentParser:
             flags=re.IGNORECASE,
         ).strip()
 
+        # Route compound requests to the planner before single-action patterns such as
+        # "open <app>" can swallow the entire utterance as one application name.
+        if re.search(r"\b(?:automate|then|after that|and then|step by step)\b", normalized):
+            planned = self._try_local_llm(raw_text, normalized)
+            if planned is not None and planned.intent == "run_automation":
+                return planned
+            return CommandObject(intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                                 clarification_prompt="I could not safely build a complete automation plan. Please state the steps explicitly.", raw_text=raw_text)
+
         if re.fullmatch(r"(?:what(?:'s| is) (?:the )?active window|which (?:app|application|window) is active|identify active window|what app am i using)", normalized):
             return CommandObject(
                 intent="get_active_window", parameters={}, confidence=1.0,
@@ -224,15 +233,6 @@ class IntentParser:
             return CommandObject(intent="get_recent_history", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
         if re.fullmatch(r"(?:continue|resume) (?:the )?(?:previous|last|pending) (?:automation|task)", normalized):
             return CommandObject(intent="resume_automation", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
-
-        # Explicit multi-step requests must go through the local planner; never silently
-        # reduce a compound request to one guessed action from the legacy classifier.
-        if re.search(r"\b(?:automate|then|after that|and then|step by step)\b", normalized):
-            planned = self._try_local_llm(raw_text, normalized)
-            if planned is not None and planned.intent == "run_automation":
-                return planned
-            return CommandObject(intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
-                                 clarification_prompt="I could not safely build a complete automation plan. Please state the steps explicitly.", raw_text=raw_text)
 
         # 4. Neural inference via PyTorch IntentPredictor
         pred = self.predictor.predict(normalized)
