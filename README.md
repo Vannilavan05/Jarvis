@@ -3,7 +3,6 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-orange.svg)](https://pytorch.org/)
 [![PyQt6](https://img.shields.io/badge/GUI-PyQt6%20Holographic-brightgreen.svg)](https://riverbankcomputing.com/software/pyqt/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-28%20passed-success.svg)](tests/)
 
 **Jarvis** is a complete, production-oriented Python desktop assistant inspired by the JARVIS system from Iron Man. It integrates real-time offline voice recognition, a genuine trainable deep-learning neural intent classifier implemented in PyTorch, strict permission-checked task execution, spoken text-to-speech feedback with acoustic loopback prevention, and a futuristic PyQt6 holographic interface.
