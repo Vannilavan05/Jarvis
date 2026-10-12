@@ -1,0 +1,43 @@
+{
+  "assistant_name": "Jarvis",
+  "wake_word": "jarvis",
+  "wake_word_aliases": ["jarvis", "hey jarvis", "okay jarvis"],
+  "wake_word_sensitivity": 0.7,
+  "sample_rate": 16000,
+  "audio_device_index": null,
+  "vosk_model_path": "models/vosk-model-small-en-us-0.15",
+  "nlp_confidence_threshold": 0.65,
+  "confirmation_timeout_seconds": 30,
+  "allowed_file_directories": [
+    "C:\\Users\\CSE LAB 2\\jarvis\\data",
+    "C:\\Users\\CSE LAB 2\\Documents",
+    "C:\\Users\\CSE LAB 2\\Downloads",
+    "C:\\Users\\CSE LAB 2\\Desktop"
+  ],
+  "tts_rate": 180,
+  "tts_volume": 1.0,
+  "tts_voice_id": null,
+  "ui_theme": "holographic_cyan",
+  "require_confirmation_for_destructive": true,
+  "active_model_version": 1,
+  "dataset_version": 1,
+  "plugins_enabled": [
+    "applications",
+    "files",
+    "web_search",
+    "system_info",
+    "system_controls",
+    "model_management",
+    "custom_commands"
+  ],
+  "approved_applications": {
+    "chrome": "chrome",
+    "browser": "chrome",
+    "notepad": "notepad",
+    "calculator": "calc",
+    "explorer": "explorer",
+    "code": "code",
+    "cmd": "cmd",
+    "terminal": "wt"
+  }
+}

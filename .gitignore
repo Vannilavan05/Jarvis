@@ -1,0 +1,29 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# PyTorch checkpoints and training artifacts
+models/v*
+models/vosk-*
+data/jarvis.db
+data/jarvis.db-wal
+data/jarvis.db-shm
+logs/*.log
+
+# PyInstaller / Build artifacts
+build/
+dist/
+*.spec.bak
+
+# Testing cache
+.pytest_cache/
+.coverage
+htmlcov/
