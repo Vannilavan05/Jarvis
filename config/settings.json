@@ -1,7 +1,11 @@
 {
   "assistant_name": "Jarvis",
   "wake_word": "jarvis",
-  "wake_word_aliases": ["jarvis", "hey jarvis", "okay jarvis"],
+  "wake_word_aliases": [
+    "jarvis",
+    "hey jarvis",
+    "okay jarvis"
+  ],
   "wake_word_sensitivity": 0.7,
   "sample_rate": 16000,
   "audio_device_index": null,
@@ -15,7 +19,7 @@
     "C:\\Users\\CSE LAB 2\\Desktop"
   ],
   "tts_rate": 180,
-  "tts_volume": 1.0,
+  "tts_volume": 1,
   "tts_voice_id": null,
   "ui_theme": "holographic_cyan",
   "require_confirmation_for_destructive": true,
@@ -39,5 +43,10 @@
     "code": "code",
     "cmd": "cmd",
     "terminal": "wt"
-  }
+  },
+  "local_llm_enabled": true,
+  "local_llm_model": "qwen2.5:3b",
+  "local_llm_base_url": "http://127.0.0.1:11434",
+  "local_llm_timeout_seconds": 8,
+  "require_speaker_verification": false
 }
