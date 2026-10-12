@@ -47,3 +47,9 @@ def test_required_speaker_verification_fails_closed_without_real_model():
     ok, confidence, _ = auth.verify_speaker(b"some audio")
     assert not ok
     assert confidence == 0.0
+
+def test_wake_word_prefix_does_not_break_explicit_confirmation():
+    cm, calls = manager()
+    ok, _, _ = cm.verify_and_execute("Jarvis, confirm")
+    assert ok
+    assert calls == ["executed"]

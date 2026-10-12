@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from plugins.applications import ApplicationPlugin
+from plugins.desktop_automation import DesktopAutomationPlugin, SAFE_HOTKEYS
 from plugins.files import FilePlugin
 from plugins.system_info import SystemInfoPlugin
 from plugins.web_search import WebSearchPlugin
@@ -22,7 +23,7 @@ def test_application_plugin_validation():
     # Unapproved application
     res2 = plugin.execute("open_application", {"application": "unapproved_trojan"}, {})
     assert res2.success is False
-    assert "not in the approved" in res2.spoken_response
+    assert "approved application list" in res2.spoken_response
 
 
 def test_file_plugin_sandboxed_operations():
@@ -85,3 +86,29 @@ def test_system_info_plugin():
     assert "memory_percent" in res.data
     assert "disk_percent" in res.data
     assert isinstance(res.data["cpu_percent"], float)
+
+
+
+def test_application_plugin_can_resolve_apps_outside_configured_aliases(monkeypatch):
+    plugin = ApplicationPlugin()
+    launched = []
+    monkeypatch.setattr(plugin, "_discover_installed_app", lambda name: "/opt/example-editor/example-editor" if name == "example editor" else None)
+    monkeypatch.setattr("plugins.applications.subprocess.Popen", lambda args, **kwargs: launched.append((args, kwargs)))
+    result = plugin.execute("open_application", {"application": "Example Editor"}, {})
+    assert result.success is True
+    assert launched
+    assert launched[0][0] == ["/opt/example-editor/example-editor"]
+    assert launched[0][1]["shell"] is False
+
+
+def test_desktop_automation_shortcut_allowlist_excludes_arbitrary_keys():
+    assert "ctrl+a" in SAFE_HOTKEYS
+    assert "alt+tab" in SAFE_HOTKEYS
+    assert "ctrl+alt+delete" not in SAFE_HOTKEYS
+    assert "win+r" not in SAFE_HOTKEYS
+
+
+def test_desktop_automation_plugin_registers_app_agnostic_intents():
+    plugin = DesktopAutomationPlugin()
+    assert {"get_active_window", "click_ui_control", "type_text", "press_hotkey"} <= set(plugin.supported_intents)
+    assert plugin.required_permissions["get_active_window"].value == "READ_ONLY"

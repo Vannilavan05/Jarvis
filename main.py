@@ -204,10 +204,10 @@ def main():
         try:
             while True:
                 user_input = input("jarvis> ").strip()
-                if user_input.lower() in {"exit", "quit", "shutdown"}:
+                if user_input.lower() in {"exit", "quit"}:
                     break
                 if user_input:
-                    on_cli_command(user_input)
+                    print("Text command dispatch is disabled. Speak 'Jarvis' followed by your command.")
         except (KeyboardInterrupt, EOFError):
             pass
         finally:

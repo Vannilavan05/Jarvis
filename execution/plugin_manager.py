@@ -9,6 +9,7 @@ try:
     from plugins.applications import ApplicationPlugin
     from plugins.base import BasePlugin
     from plugins.custom_commands import CustomCommandsPlugin
+    from plugins.desktop_automation import DesktopAutomationPlugin
     from plugins.files import FilePlugin
     from plugins.model_management import ModelManagementPlugin
     from plugins.system_controls import SystemControlsPlugin
@@ -18,6 +19,7 @@ except (ImportError, ValueError):
     from jarvis.plugins.applications import ApplicationPlugin
     from jarvis.plugins.base import BasePlugin
     from jarvis.plugins.custom_commands import CustomCommandsPlugin
+    from jarvis.plugins.desktop_automation import DesktopAutomationPlugin
     from jarvis.plugins.files import FilePlugin
     from jarvis.plugins.model_management import ModelManagementPlugin
     from jarvis.plugins.system_controls import SystemControlsPlugin
@@ -58,6 +60,7 @@ class PluginManager:
 
     def _register_default_plugins(self):
         self.register_plugin(ApplicationPlugin())
+        self.register_plugin(DesktopAutomationPlugin())
         self.register_plugin(FilePlugin())
         self.register_plugin(WebSearchPlugin())
         self.register_plugin(SystemInfoPlugin())

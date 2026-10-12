@@ -129,7 +129,86 @@ class IntentParser:
                 model_version=None,
             )
 
-        # 3. Neural inference via PyTorch IntentPredictor
+        # 3. Deterministic desktop commands. The trained classifier predates these
+        # intents, so route explicit, unambiguous desktop requests before neural inference.
+        original_command = re.sub(
+            r"^(?:hey\s+jarvis|okay\s+jarvis|jarvis)\s*[, :]?\s*",
+            "",
+            raw_text.strip(),
+            flags=re.IGNORECASE,
+        )
+        original_command = re.sub(
+            r"^(?:please|could\s+you|can\s+you|would\s+you)\s+",
+            "",
+            original_command,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        if re.fullmatch(r"(?:what(?:'s| is) (?:the )?active window|which (?:app|application|window) is active|identify active window|what app am i using)", normalized):
+            return CommandObject(
+                intent="get_active_window", parameters={}, confidence=1.0,
+                raw_text=raw_text, model_version=None,
+            )
+
+        typed_match = re.match(r"^(?:type|enter|write|input|insert)\s+(.+)$", original_command, re.IGNORECASE)
+        if typed_match:
+            dictated_text = typed_match.group(1).strip()
+            if dictated_text:
+                return CommandObject(
+                    intent="type_text", parameters={"text": dictated_text}, confidence=1.0,
+                    raw_text=raw_text, model_version=None,
+                )
+
+        hotkey_match = re.fullmatch(r"(?:press|hit|use)\s+(?:the\s+)?(.+)", normalized)
+        if hotkey_match:
+            shortcut = hotkey_match.group(1).strip().replace(" ", "")
+            shortcut = shortcut.replace("pageup", "page up").replace("pagedown", "page down")
+            if shortcut in {
+                "ctrl+a", "ctrl+c", "ctrl+v", "ctrl+x", "ctrl+z", "ctrl+y",
+                "ctrl+s", "ctrl+f", "ctrl+p", "ctrl+w", "ctrl+tab",
+                "ctrl+shift+tab", "alt+tab", "enter", "escape", "tab",
+                "shift+tab", "home", "end", "page up", "page down",
+            }:
+                return CommandObject(
+                    intent="press_hotkey", parameters={"keys": shortcut}, confidence=1.0,
+                    raw_text=raw_text, model_version=None,
+                )
+            return CommandObject(
+                intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                clarification_prompt="That keyboard shortcut is not on Jarvis's safe shortcut list.",
+                raw_text=raw_text, model_version=None,
+            )
+
+        click_match = re.fullmatch(
+            r"(?:click|select)\s+(?:the\s+)?(.+?)(?:\s+(button|menu item|tab|checkbox|radio button|link|list item))?",
+            original_command,
+            flags=re.IGNORECASE,
+        )
+        if click_match:
+            control_name = click_match.group(1).strip()
+            suffix = (click_match.group(2) or "button").lower()
+            control_type = {
+                "button": "Button", "menu item": "MenuItem", "tab": "TabItem",
+                "checkbox": "CheckBox", "radio button": "RadioButton",
+                "link": "Hyperlink", "list item": "ListItem",
+            }[suffix]
+            if control_name:
+                return CommandObject(
+                    intent="click_ui_control",
+                    parameters={"control_name": control_name, "control_type": control_type},
+                    confidence=1.0, raw_text=raw_text, model_version=None,
+                )
+
+        open_match = re.fullmatch(r"(?:open|launch|start|run)\s+(?:the\s+)?(.+)", original_command, flags=re.IGNORECASE)
+        if open_match:
+            application = open_match.group(1).strip()
+            if application:
+                return CommandObject(
+                    intent="open_application", parameters={"application": application},
+                    confidence=1.0, raw_text=raw_text, model_version=None,
+                )
+
+        # 4. Neural inference via PyTorch IntentPredictor
         pred = self.predictor.predict(normalized)
 
         if not pred.intent:
@@ -191,6 +270,34 @@ class IntentParser:
         try:
             allowed = self.command_registry.all_intents() if self.command_registry is not None else {}
             result = self.llm_router.interpret(normalized)
+            # Do not let the model invent dictated text or an application/control target.
+            if result.mode == "action_request" and result.intent == "type_text":
+                spoken_text = raw_text.strip()
+                spoken_text = re.sub(r"^(?:hey\s+jarvis|okay\s+jarvis|jarvis)\s*[, :]?\s*", "", spoken_text, flags=re.IGNORECASE)
+                spoken_text = re.sub(r"^(?:please|could\s+you|can\s+you|would\s+you)\s+", "", spoken_text, flags=re.IGNORECASE)
+                dictated = re.match(r"^(?:type|enter|write|input|insert)\s+(.+)$", spoken_text, re.IGNORECASE)
+                if not dictated:
+                    return CommandObject(
+                        intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                        clarification_prompt="Tell me exactly what text you want me to type.",
+                        raw_text=raw_text,
+                    )
+                exact_text = dictated.group(1).strip()
+                safe_parameters = dict(result.parameters)
+                safe_parameters["text"] = exact_text
+                result = type(result)(
+                    mode=result.mode, intent=result.intent, parameters=safe_parameters,
+                    response=result.response, needs_clarification=result.needs_clarification,
+                )
+            if result.mode == "action_request" and result.intent in {"open_application", "click_ui_control"}:
+                key = "application" if result.intent == "open_application" else "control_name"
+                target = result.parameters.get(key)
+                if not isinstance(target, str) or not target.strip() or target.casefold() not in normalized.casefold():
+                    return CommandObject(
+                        intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                        clarification_prompt="Please state the exact application or control name you want me to use.",
+                        raw_text=raw_text,
+                    )
             if result.mode == "conversation":
                 return CommandObject(
                     intent="conversation", parameters={}, confidence=1.0,

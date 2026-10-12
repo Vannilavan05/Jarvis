@@ -69,12 +69,18 @@ class SettingsStore:
         """Returns canonical Path objects of allowed file directories."""
         raw_dirs = self.get("allowed_file_directories", [])
         resolved = []
-        for d in raw_dirs:
+        project_root = self.config_path.resolve().parent.parent
+        for directory in raw_dirs:
             try:
-                p = Path(d).resolve()
-                resolved.append(p)
-            except Exception:
-                continue
+                # Support user-home paths and project-relative paths on any machine.
+                path = Path(str(directory)).expanduser()
+                if not path.is_absolute():
+                    path = project_root / path
+                path = path.resolve()
+                if path not in resolved:
+                    resolved.append(path)
+            except (OSError, RuntimeError, TypeError, ValueError):
+                logger.warning("Ignoring invalid allowed directory setting: %r", directory)
         return resolved
 
     def _save_internal(self) -> None:
@@ -108,7 +114,7 @@ class SettingsStore:
             "tts_volume": 1.0,
             "tts_voice_id": None,
             "ui_theme": "holographic_cyan",
-            "require_confirmation_for_destructive": true if hasattr(__builtins__, "true") else True,
+            "require_confirmation_for_destructive": True,
             "active_model_version": 1,
             "dataset_version": 1,
             "plugins_enabled": [

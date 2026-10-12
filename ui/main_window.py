@@ -185,14 +185,17 @@ class JarvisMainWindow(QMainWindow):
         self.btn_mute_toggle.clicked.connect(self._toggle_listening)
         cmd_bar.addWidget(self.btn_mute_toggle)
 
-        # Fallback Text Input for silent testing / accessibility
+        # Commands must originate from the microphone, not typed text.
+        # Keep a visible disabled hint so users understand the voice-only policy.
         self.input_cmd = QLineEdit(self)
-        self.input_cmd.setPlaceholderText("Spoken command fallback (e.g., 'Open Chrome', 'Train the model', 'Confirm')...")
-        self.input_cmd.returnPressed.connect(self._submit_manual_command)
+        self.input_cmd.setReadOnly(True)
+        self.input_cmd.setPlaceholderText("VOICE ONLY — say 'Jarvis' followed by your command")
+        self.input_cmd.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.input_cmd.setEnabled(False)
         cmd_bar.addWidget(self.input_cmd, stretch=1)
 
-        self.btn_send = QPushButton("DISPATCH")
-        self.btn_send.clicked.connect(self._submit_manual_command)
+        self.btn_send = QPushButton("VOICE ONLY")
+        self.btn_send.setEnabled(False)
         cmd_bar.addWidget(self.btn_send)
 
         main_layout.addLayout(cmd_bar)

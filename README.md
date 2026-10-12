@@ -196,23 +196,30 @@ Destructive and privileged operations are never executed immediately.
 - Python 3.11, 3.12, 3.13, or 3.14
 - Working microphone and speakers
 
-### Step 1: Clone or Navigate to the Project
-```bash
-cd "C:\Users\CSE LAB 2\jarvis"
+### Step 1: Install and configure automatically (Windows)
+Open PowerShell in the project folder and run:
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\setup_windows.ps1
 ```
+This creates a project-local `.venv`, installs Python dependencies, downloads the offline Vosk English speech model, and creates the local data/log folders. Python 3.11 is the recommended baseline.
 
-### Step 2: Install Dependencies
-```bash
-pip install -r requirements.txt
+If you prefer to install manually:
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
+Then download `vosk-model-small-en-us-0.15` from [Vosk Models](https://alphacephei.com/vosk/models) and extract it under `models\vosk-model-small-en-us-0.15` so the folder contains `am\`, `conf\`, and `graph\`.
 
-### Step 3: Set up the Offline Vosk STT Model (required for voice commands)
-Without this model Jarvis can only take typed commands; spoken commands are ignored and a "Voice commands are disabled" warning is shown at startup.
-1. Download `vosk-model-small-en-us-0.15` (approx 40 MB) from [Vosk Models](https://alphacephei.com/vosk/models).
-2. Extract the model folder to `jarvis/models/vosk-model-small-en-us-0.15` (the folder must directly contain `am/`, `conf/` and `graph/`; a doubled folder from unzipping is detected automatically).
-3. The assistant locates it relative to the project folder (not the current directory) and loads it on startup.
+### Step 2: Start Jarvis
+Double-click `scripts\run_jarvis.bat`, or run:
+```powershell
+.\.venv\Scripts\python.exe main.py
+```
+For the console-based voice mode use `\.venv\Scripts\python.exe main.py --cli`. In this mode, speak commands; typing is accepted only to exit. If the wrong microphone is selected, use `\.venv\Scripts\python.exe main.py --device <index>`.
 
-Speak the wake word and command together ("Jarvis open Chrome") or say "Jarvis", wait for "At your service", then give the command. Use `python main.py --device <index>` if the wrong microphone is picked.
+The checked-in sandbox paths are portable: `data` resolves inside the project and `~/Documents`, `~/Downloads`, and `~/Desktop` resolve to the current Windows user's home directory. You can edit `allowed_file_directories` in `config/settings.json` to add or remove authorized folders.
 
 ---
 
@@ -250,15 +257,12 @@ Jarvis includes a comprehensive automated test suite powered by `pytest` coverin
 - Application launcher, sandboxed file operations, web search, system telemetry
 - End-to-end conversational training workflows
 
-Execute the complete test suite:
-```bash
-python -m pytest tests -v
+Execute the test suite from the project environment:
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -v
 ```
 
-Expected result:
-```text
-============================= 28 passed in 5.21s =============================
-```
+CI runs the local-LLM/security and desktop-intent regression tests on every push and pull request. The full suite can additionally require optional GUI/audio dependencies and should be run on the target Windows machine. Do not treat a passing CI run as proof that every installed application's UI is automatable.
 
 ---
 
@@ -304,4 +308,18 @@ Jarvis keeps the existing PyTorch intent classifier. When that classifier is unc
 A 3B quantized model is a practical starting point for a 16 GB RAM machine, but actual memory use and latency depend on quantization, context size, and other applications. The model is downloaded once; inference is local thereafter.
 
 **Security note:** The built-in speaker-verification class is only a hook, not a trained biometric system. If `require_speaker_verification` is enabled without a real verifier, high-trust speaker verification now fails closed instead of pretending to authenticate the speaker. Do not treat voice recognition/transcription as proof of speaker identity.
+
+## 11. System-wide desktop application control
+
+Jarvis now includes an app-agnostic Windows UI Automation layer rather than requiring a custom plugin for every application.
+
+- **Discover and open installed apps:** the launcher searches Start Menu shortcuts, Windows App Paths registry entries, and executable search paths. The old configured aliases still work, but they are no longer the only way to launch an app.
+- **Inspect the active window:** ask which application/window is currently focused.
+- **Interact by accessible control name:** click a uniquely named UI Automation control in the active window. A confirmation is required before the click.
+- **Type dictated text and use safe shortcuts:** Jarvis can type into the focused control and supports a small allowlist of navigation/editing shortcuts. Arbitrary shell execution and coordinate guessing are not part of this interface.
+- **Dependency:** on Windows, install the optional UI Automation package with `python -m pip install pywinauto` (it is also declared as a Windows-only requirement).
+
+Example voice requests include “Open Paint”, “What window is active?”, “Click the Save button”, “Type hello world”, and “Press Ctrl+S”. Commands are still parsed through the local intent pipeline and dispatched through the permission/confirmation layers.
+
+**Limitations and safety:** generic automation depends on an application's exposed accessibility tree. Apps with custom-drawn controls, elevated/admin windows, remote desktops, UAC prompts, games, or protected surfaces may need special handling or may not be automatable. Clicking a UI control requires confirmation because the same generic button could trigger a consequential action. This feature needs testing on the target Windows machine; passing CI tests does not prove compatibility with every installed app.
 
