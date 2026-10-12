@@ -1,23 +1,14 @@
 {
   "assistant_name": "Jarvis",
   "wake_word": "jarvis",
-  "wake_word_aliases": [
-    "jarvis",
-    "hey jarvis",
-    "okay jarvis"
-  ],
+  "wake_word_aliases": ["jarvis", "hey jarvis", "okay jarvis"],
   "wake_word_sensitivity": 0.7,
   "sample_rate": 16000,
   "audio_device_index": null,
   "vosk_model_path": "models/vosk-model-small-en-us-0.15",
   "nlp_confidence_threshold": 0.65,
   "confirmation_timeout_seconds": 30,
-  "allowed_file_directories": [
-    "data",
-    "~/Documents",
-    "~/Downloads",
-    "~/Desktop"
-  ],
+  "allowed_file_directories": ["data", "~/Documents", "~/Downloads", "~/Desktop"],
   "tts_rate": 180,
   "tts_volume": 1,
   "tts_voice_id": null,
@@ -26,28 +17,19 @@
   "active_model_version": 1,
   "dataset_version": 1,
   "plugins_enabled": [
-    "applications",
-    "files",
-    "web_search",
-    "system_info",
-    "system_controls",
-    "model_management",
-    "custom_commands",
-    "desktop_automation"
+    "applications", "assistant_memory", "files", "web_search", "system_info",
+    "system_controls", "model_management", "custom_commands", "desktop_automation"
   ],
   "approved_applications": {
-    "chrome": "chrome",
-    "browser": "chrome",
-    "notepad": "notepad",
-    "calculator": "calc",
-    "explorer": "explorer",
-    "code": "code",
-    "cmd": "cmd",
-    "terminal": "wt"
+    "chrome": "chrome", "browser": "chrome", "notepad": "notepad",
+    "calculator": "calc", "explorer": "explorer", "code": "code",
+    "cmd": "cmd", "terminal": "wt"
   },
   "local_llm_enabled": true,
   "local_llm_model": "qwen2.5:3b",
   "local_llm_base_url": "http://127.0.0.1:11434",
   "local_llm_timeout_seconds": 8,
-  "require_speaker_verification": false
+  "require_speaker_verification": false,
+  "assistant_memory_enabled": true,
+  "automation_max_steps": 10
 }
