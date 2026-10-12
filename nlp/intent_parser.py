@@ -201,8 +201,6 @@ class IntentParser:
                         raw_text=raw_text,
                     )
                 exact_text = dictated.group(1).strip()
-                if len(exact_text) >= 2 and exact_text[0] == exact_text[-1] and exact_text[0] in {"\\\"", "'"}:
-                    exact_text = exact_text[1:-1]
                 safe_parameters = dict(result.parameters)
                 safe_parameters["text"] = exact_text
                 result = type(result)(
