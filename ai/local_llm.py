@@ -36,6 +36,14 @@ intents. If ambiguous, use clarification mode. For ordinary conversation use con
 mode. For a clear supported action return action_request with intent and parameters only.
 The application validates and authorizes every action before execution. Return only JSON
 matching the supplied schema. Do not invent parameters not present or unambiguously implied.
+
+Desktop control intents and their parameters:
+- get_active_window: no parameters; identify the focused app/window.
+- click_ui_control: control_name must be the exact accessible name requested; optional control_type is Button, MenuItem, TabItem, CheckBox, RadioButton, Hyperlink, or ListItem. This action requires explicit confirmation.
+- type_text: text is exactly what the user dictated for the focused field.
+- press_hotkey: keys must be one of ctrl+a, ctrl+c, ctrl+v, ctrl+x, ctrl+z, ctrl+y, ctrl+s, ctrl+f, ctrl+p, ctrl+tab, ctrl+shift+tab, alt+tab, enter, escape, tab, shift+tab, home, end, page up, page down.
+For launching apps, use open_application with application set to the requested app name.
+Never invent coordinates, executable paths, or controls. Never infer permission to send, delete, purchase, install, uninstall, submit, or execute anything. Ask for clarification if the target or action is unclear.
 """
 
 @dataclass(frozen=True)
