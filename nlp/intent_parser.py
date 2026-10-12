@@ -191,6 +191,33 @@ class IntentParser:
         try:
             allowed = self.command_registry.all_intents() if self.command_registry is not None else {}
             result = self.llm_router.interpret(normalized)
+            # Do not let the model invent dictated text or an application/control target.
+            if result.mode == "action_request" and result.intent == "type_text":
+                dictated = re.match(r"^(?:type|enter|write|input|insert)\\s+(.+)$", normalized, re.IGNORECASE)
+                if not dictated:
+                    return CommandObject(
+                        intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                        clarification_prompt="Tell me exactly what text you want me to type.",
+                        raw_text=raw_text,
+                    )
+                exact_text = dictated.group(1).strip()
+                if len(exact_text) >= 2 and exact_text[0] == exact_text[-1] and exact_text[0] in {"\\\"", "'"}:
+                    exact_text = exact_text[1:-1]
+                safe_parameters = dict(result.parameters)
+                safe_parameters["text"] = exact_text
+                result = type(result)(
+                    mode=result.mode, intent=result.intent, parameters=safe_parameters,
+                    response=result.response, needs_clarification=result.needs_clarification,
+                )
+            if result.mode == "action_request" and result.intent in {"open_application", "click_ui_control"}:
+                key = "application" if result.intent == "open_application" else "control_name"
+                target = result.parameters.get(key)
+                if not isinstance(target, str) or not target.strip() or target.casefold() not in normalized.casefold():
+                    return CommandObject(
+                        intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                        clarification_prompt="Please state the exact application or control name you want me to use.",
+                        raw_text=raw_text,
+                    )
             if result.mode == "conversation":
                 return CommandObject(
                     intent="conversation", parameters={}, confidence=1.0,
