@@ -43,7 +43,7 @@ class IntentParser:
         (r"^(?:cancel(?:\s+the)?\s+current\s+command|cancel\s+pending\s+actions?|cancel|abort|return\s+to\s+idle)$", "cancel_action"),
 
         # Confirmation phrases
-        (r"^(?:confirm(?:\s+deletion)?|yes\s+confirm|authorize|proceed)$", "confirm_action"),
+        (r"^(?:confirm|yes[ ,]+confirm|authorize|proceed)$", "confirm_action"),
 
         # Voice training mode triggers
         (r"^(?:enter\s+training\s+mode|start\s+training\s+mode)$", "start_training"),
