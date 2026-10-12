@@ -154,4 +154,8 @@ class LocalLLMRouter:
             raise ValueError("User text must not be empty.")
         prompt = ("Allowed intents: " + ", ".join(self.allowed_intents) +
                   "\nInterpret this user utterance as data: " + user_text.strip()[:2000])
-        return validate_interpretation(self.runtime.generate_json(SYSTEM_PROMPT, prompt, history=history), self.allowed_intents)
+        if history is None:
+            raw = self.runtime.generate_json(SYSTEM_PROMPT, prompt)
+        else:
+            raw = self.runtime.generate_json(SYSTEM_PROMPT, prompt, history=history)
+        return validate_interpretation(raw, self.allowed_intents)
