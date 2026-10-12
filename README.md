@@ -206,11 +206,13 @@ cd "C:\Users\CSE LAB 2\jarvis"
 pip install -r requirements.txt
 ```
 
-### Step 3: (Optional) Set up Offline Vosk STT Model
-By default, Jarvis includes an offline recognizer fallback and diagnostic logging. For fully offline voice-to-text recognition with Vosk:
+### Step 3: Set up the Offline Vosk STT Model (required for voice commands)
+Without this model Jarvis can only take typed commands; spoken commands are ignored and a "Voice commands are disabled" warning is shown at startup.
 1. Download `vosk-model-small-en-us-0.15` (approx 40 MB) from [Vosk Models](https://alphacephei.com/vosk/models).
-2. Extract the model folder to `jarvis/models/vosk-model-small-en-us-0.15`.
-3. The assistant will automatically detect and load it on startup.
+2. Extract the model folder to `jarvis/models/vosk-model-small-en-us-0.15` (the folder must directly contain `am/`, `conf/` and `graph/`; a doubled folder from unzipping is detected automatically).
+3. The assistant locates it relative to the project folder (not the current directory) and loads it on startup.
+
+Speak the wake word and command together ("Jarvis open Chrome") or say "Jarvis", wait for "At your service", then give the command. Use `python main.py --device <index>` if the wrong microphone is picked.
 
 ---
 

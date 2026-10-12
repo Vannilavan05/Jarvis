@@ -6,42 +6,125 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional, Tuple
-import vosk
+
+try:
+    import vosk
+except ImportError:  # Allow the app to start (text-only) when vosk is not installed
+    vosk = None
 
 logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _is_vosk_model_dir(path: Path) -> bool:
+    """A real Vosk model folder contains at least the `am` and `conf` subfolders."""
+    return path.is_dir() and (path / "am").is_dir() and (path / "conf").is_dir()
+
+
+def _find_model_dir(base: Path, max_depth: int = 2) -> Optional[Path]:
+    """Finds a Vosk model folder at `base` or up to `max_depth` levels below it.
+
+    Handles the common mistake of extracting the zip into a doubled folder, e.g.
+    models/vosk-model-small-en-us-0.15/vosk-model-small-en-us-0.15/.
+    """
+    if _is_vosk_model_dir(base):
+        return base
+    if max_depth <= 0 or not base.is_dir():
+        return None
+    try:
+        children = sorted(c for c in base.iterdir() if c.is_dir())
+    except OSError:
+        return None
+    for child in children:
+        found = _find_model_dir(child, max_depth - 1)
+        if found:
+            return found
+    return None
+
+
+def resolve_model_path(model_path: Optional[str], search_models_dir: bool = True) -> Optional[Path]:
+    """Locates the Vosk model folder.
+
+    Relative paths are tried against the current working directory *and* the project root, so the
+    result no longer depends on where Jarvis was launched from. If the configured path is missing and
+    `search_models_dir` is True, any `vosk-model*` folder under <project>/models is used instead.
+    """
+    candidates = []
+    if model_path:
+        p = Path(model_path)
+        if p.is_absolute():
+            candidates.append(p)
+        else:
+            candidates.extend([Path.cwd() / p, PROJECT_ROOT / p])
+
+    for candidate in candidates:
+        found = _find_model_dir(candidate)
+        if found:
+            return found
+
+    if search_models_dir:
+        models_dir = PROJECT_ROOT / "models"
+        if models_dir.is_dir():
+            for child in sorted(models_dir.glob("vosk-model*")):
+                found = _find_model_dir(child)
+                if found:
+                    logger.warning(f"Configured Vosk model path not found; using discovered model at {found}")
+                    return found
+    return None
 
 
 class OfflineSpeechRecognizer:
     """Performs offline speech-to-text using Vosk Kaldi speech recognition."""
 
-    def __init__(self, model_path: Optional[str] = None, sample_rate: int = 16000):
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        sample_rate: int = 16000,
+        search_models_dir: bool = True,
+    ):
         self.sample_rate = sample_rate
-        self.model_path = Path(model_path) if model_path else None
-        self.vosk_model: Optional[vosk.Model] = None
-        self.recognizer: Optional[vosk.KaldiRecognizer] = None
+        self.requested_path = Path(model_path) if model_path else None
+        self.model_path: Optional[Path] = self.requested_path
+        self.vosk_model = None
+        self.recognizer = None
         self.is_ready = False
+        # Human-readable reason shown to the user when speech recognition is unavailable
+        self.status_message = ""
 
-        self._init_vosk()
+        self._init_vosk(search_models_dir)
 
-    def _init_vosk(self):
+    def _init_vosk(self, search_models_dir: bool = True):
         """Attempts to initialize the Vosk offline model."""
-        if self.model_path and self.model_path.exists():
-            try:
-                # Silence internal Kaldi logs
-                vosk.SetLogLevel(-1)
-                self.vosk_model = vosk.Model(str(self.model_path))
-                self.recognizer = vosk.KaldiRecognizer(self.vosk_model, float(self.sample_rate))
-                self.is_ready = True
-                logger.info(f"Vosk offline model successfully loaded from {self.model_path}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Vosk model at {self.model_path}: {e}")
-                self.is_ready = False
-        else:
-            logger.info(
-                f"Vosk model path '{self.model_path}' not found. "
-                "Running in manual/fallback speech recognition mode. "
-                "To enable local voice STT, download vosk-model-small-en-us-0.15 and place in models/."
+        if vosk is None:
+            self.status_message = "The 'vosk' package is not installed. Run: pip install vosk"
+            logger.error(self.status_message)
+            return
+
+        resolved = resolve_model_path(
+            str(self.requested_path) if self.requested_path else None,
+            search_models_dir=search_models_dir,
+        )
+        if resolved is None:
+            self.status_message = (
+                f"Vosk speech model not found (looked for '{self.requested_path}'). Voice commands are DISABLED. "
+                "Download vosk-model-small-en-us-0.15 from https://alphacephei.com/vosk/models and extract it to "
+                f"{PROJECT_ROOT / 'models' / 'vosk-model-small-en-us-0.15'}"
             )
+            logger.error(self.status_message)
+            return
+
+        self.model_path = resolved
+        try:
+            # Silence internal Kaldi logs
+            vosk.SetLogLevel(-1)
+            self.vosk_model = vosk.Model(str(resolved))
+            self.recognizer = vosk.KaldiRecognizer(self.vosk_model, float(self.sample_rate))
+            self.is_ready = True
+            logger.info(f"Vosk offline model successfully loaded from {resolved}")
+        except Exception as e:
+            self.status_message = f"Failed to initialize Vosk model at {resolved}: {e}"
+            logger.error(self.status_message)
             self.is_ready = False
 
     def reset(self):
