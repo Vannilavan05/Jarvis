@@ -42,3 +42,20 @@ def test_llm_cannot_invent_application_name():
     assert result is not None
     assert result.is_ambiguous is True
     assert "exact application" in result.clarification_prompt
+
+
+def test_explicit_desktop_commands_bypass_legacy_model():
+    parser = IntentParser(predictor=object(), command_registry=CommandRegistry())
+
+    typed = parser.parse("Jarvis, type Hello World")
+    opened = parser.parse("Hey Jarvis, open Paint")
+    clicked = parser.parse("Jarvis, click the Save button")
+    hotkey = parser.parse("Jarvis, press Ctrl+S")
+    active = parser.parse("Jarvis, what is the active window")
+
+    assert (typed.intent, typed.parameters["text"]) == ("type_text", "Hello World")
+    assert (opened.intent, opened.parameters["application"]) == ("open_application", "Paint")
+    assert clicked.intent == "click_ui_control"
+    assert clicked.parameters == {"control_name": "save", "control_type": "Button"}
+    assert (hotkey.intent, hotkey.parameters["keys"]) == ("press_hotkey", "ctrl+s")
+    assert active.intent == "get_active_window"
