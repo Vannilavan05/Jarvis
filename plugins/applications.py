@@ -108,11 +108,7 @@ class ApplicationPlugin(BasePlugin):
         if len(exact) > 1:
             return None
 
-        partial = [p for p in shortcuts if requested in self._normalize(p.stem)]
-        if len(partial) == 1:
-            return partial[0]
-        if len(partial) > 1:
-            return None
+        # Do not guess from partial names (e.g. "Paint" could mean multiple apps).
 
         # Windows App Paths entries allow discovery of installed Win32 applications.
         for candidate in (app_name, app_name + ".exe"):
