@@ -118,8 +118,6 @@ def initialize_system():
         "settings": settings,
         "assistant_memory": assistant_memory,
         "training_store": training_store,
-        "assistant_memory": assistant_memory,
-        "automation_engine": automation_engine,
         "model_registry": model_registry,
         "predictor": predictor,
         "db_manager": db,
