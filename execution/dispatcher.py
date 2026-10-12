@@ -204,6 +204,17 @@ class CommandDispatcher:
                 success=False, spoken_feedback=feedback, intent=intent, error="Plugin not found"
             )
 
+        # Capture the target window before a confirmation prompt. A later focus change
+        # must not redirect a confirmed click into a different application.
+        capture_target = getattr(plugin, "capture_target", None)
+        if intent == "click_ui_control" and callable(capture_target):
+            try:
+                params = capture_target(intent, params)
+            except Exception as exc:
+                feedback = "I could not safely identify the target window, so I did not click anything."
+                logger.warning("Could not capture desktop target before confirmation: %s", exc)
+                return ExecutionResponse(success=False, spoken_feedback=feedback, intent=intent, error=str(exc))
+
         # 7. Check if Sensitive Action requires explicit confirmation
         if meta.requires_confirmation or meta.permission_level in {
             PermissionLevel.DESTRUCTIVE,
