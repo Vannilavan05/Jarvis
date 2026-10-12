@@ -217,7 +217,7 @@ Double-click `scripts\run_jarvis.bat`, or run:
 ```powershell
 .\.venv\Scripts\python.exe main.py
 ```
-For the text-based diagnostic/CLI mode use `\.venv\Scripts\python.exe main.py --cli`. If the wrong microphone is selected, use `\.venv\Scripts\python.exe main.py --device <index>`.
+For the console-based voice mode use `\.venv\Scripts\python.exe main.py --cli`. In this mode, speak commands; typing is accepted only to exit. If the wrong microphone is selected, use `\.venv\Scripts\python.exe main.py --device <index>`.
 
 The checked-in sandbox paths are portable: `data` resolves inside the project and `~/Documents`, `~/Downloads`, and `~/Desktop` resolve to the current Windows user's home directory. You can edit `allowed_file_directories` in `config/settings.json` to add or remove authorized folders.
 
