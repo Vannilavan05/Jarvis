@@ -305,3 +305,17 @@ A 3B quantized model is a practical starting point for a 16 GB RAM machine, but 
 
 **Security note:** The built-in speaker-verification class is only a hook, not a trained biometric system. If `require_speaker_verification` is enabled without a real verifier, high-trust speaker verification now fails closed instead of pretending to authenticate the speaker. Do not treat voice recognition/transcription as proof of speaker identity.
 
+## 11. System-wide desktop application control
+
+Jarvis now includes an app-agnostic Windows UI Automation layer rather than requiring a custom plugin for every application.
+
+- **Discover and open installed apps:** the launcher searches Start Menu shortcuts, Windows App Paths registry entries, and executable search paths. The old configured aliases still work, but they are no longer the only way to launch an app.
+- **Inspect the active window:** ask which application/window is currently focused.
+- **Interact by accessible control name:** click a uniquely named UI Automation control in the active window. A confirmation is required before the click.
+- **Type dictated text and use safe shortcuts:** Jarvis can type into the focused control and supports a small allowlist of navigation/editing shortcuts. Arbitrary shell execution and coordinate guessing are not part of this interface.
+- **Dependency:** on Windows, install the optional UI Automation package with `python -m pip install pywinauto` (it is also declared as a Windows-only requirement).
+
+Example voice requests include “Open Paint”, “What window is active?”, “Click the Save button”, “Type hello world”, and “Press Ctrl+S”. Commands are still parsed through the local intent pipeline and dispatched through the permission/confirmation layers.
+
+**Limitations and safety:** generic automation depends on an application's exposed accessibility tree. Apps with custom-drawn controls, elevated/admin windows, remote desktops, UAC prompts, games, or protected surfaces may need special handling or may not be automatable. Clicking a UI control requires confirmation because the same generic button could trigger a consequential action. This feature needs testing on the target Windows machine; passing CI tests does not prove compatibility with every installed app.
+
