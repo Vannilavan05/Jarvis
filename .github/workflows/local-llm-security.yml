@@ -22,8 +22,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install test runner
-        run: python -m pip install --upgrade pip pytest
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Compile changed Python modules
         run: >-
           python -m py_compile
