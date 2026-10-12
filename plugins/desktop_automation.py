@@ -135,7 +135,7 @@ class DesktopAutomationPlugin(BasePlugin):
                     # Focus metadata can be unavailable for custom controls; fail closed.
                     return PluginExecutionResult(success=False, spoken_response="I cannot verify the focused control, so I did not type.")
                 from pywinauto.keyboard import send_keys
-                escaped = text.replace("{", "{{").replace("}", "}}")
+                escaped = "".join("{{}" if char == "{" else "{}}" if char == "}" else char for char in text)
                 send_keys(escaped, with_spaces=True, pause=0.002)
                 return PluginExecutionResult(success=True, spoken_response="Typed the requested text into the focused control.")
 
