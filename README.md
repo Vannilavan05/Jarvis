@@ -323,3 +323,24 @@ Example voice requests include “Open Paint”, “What window is active?”, �
 
 **Limitations and safety:** generic automation depends on an application's exposed accessibility tree. Apps with custom-drawn controls, elevated/admin windows, remote desktops, UAC prompts, games, or protected surfaces may need special handling or may not be automatable. Clicking a UI control requires confirmation because the same generic button could trigger a consequential action. This feature needs testing on the target Windows machine; passing CI tests does not prove compatibility with every installed app.
 
+
+---
+
+## Persistent Chatbot Memory & Multi-Step Automation
+
+Jarvis now has a shared local memory layer for its voice chatbot and desktop assistant:
+- Conversation turns are stored in the existing SQLite database and recent turns are supplied to the local Ollama model as context.
+- Explicit "remember that ..." voice commands save locally stored notes. Ask "what do you remember", "what is pending", or "what have we been working on" to retrieve saved state.
+- Automation plans are limited to 10 allowlisted steps and persisted in SQLite with per-step statuses. Each step is sent through the normal dispatcher, permission checks, confirmation manager, plugin system, and audit logger.
+- Plans pause when a step needs spoken confirmation. Say "Jarvis, confirm" to authorize that action, or "Jarvis, cancel" to cancel the paused task. Say "Jarvis, continue the previous task" to resume an interrupted plan.
+- Automation cannot execute arbitrary shell commands or generated code. Destructive, system-power, installation, purchasing, sending, and nested-automation actions are excluded from plans. A plan stops on the first failed step and records the failure.
+- Data stays in the local SQLite database. It is not sent to a cloud LLM. Recent conversation context is bounded to eight stored messages; task and memory history remains local until the user deletes the database or a future memory-management feature is added.
+
+Example voice commands:
+- "Jarvis, remember that my current goal is to learn AWS."
+- "Jarvis, what do you remember?"
+- "Jarvis, what is pending?"
+- "Jarvis, automate this: open Chrome then search for Python tutorials."
+- "Jarvis, continue the previous task."
+
+The LLM proposes structured plans but does not execute them directly. Jarvis validates every step before dispatch. The local planner can still misunderstand a request; review the spoken feedback and use confirmation prompts carefully. End-to-end Windows microphone, Ollama, and accessibility-tree tests are still required before calling the full application production-ready.

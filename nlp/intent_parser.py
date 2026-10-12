@@ -70,11 +70,13 @@ class IntentParser:
         confidence_threshold: float = 0.65,
         llm_router=None,
         command_registry=None,
+        assistant_memory=None,
     ):
         self.predictor = predictor or IntentPredictor(confidence_threshold=confidence_threshold)
         self.confidence_mgr = ConfidenceManager(threshold=confidence_threshold)
         self.llm_router = llm_router
         self.command_registry = command_registry
+        self.assistant_memory = assistant_memory
 
     def normalize(self, text: str) -> str:
         """Strips assistant wake name and conversational prefixes."""
@@ -84,7 +86,7 @@ class IntentParser:
         cleaned = re.sub(r"\s*[,:]?\s*(?:jarvis)$", "", cleaned)
         # Remove politeness fillers
         cleaned = re.sub(r"^(?:please|could\s+you|can\s+you|would\s+you)\s+", "", cleaned)
-        return cleaned.strip()
+        return cleaned.strip().rstrip("?.!")
 
     def parse(self, raw_text: str) -> CommandObject:
         """Parses speech text into a structured CommandObject."""
@@ -143,6 +145,15 @@ class IntentParser:
             original_command,
             flags=re.IGNORECASE,
         ).strip()
+
+        # Route compound requests to the planner before single-action patterns such as
+        # "open <app>" can swallow the entire utterance as one application name.
+        if re.search(r"\b(?:automate|then|after that|and then|step by step)\b", normalized):
+            planned = self._try_local_llm(raw_text, normalized)
+            if planned is not None and planned.intent == "run_automation":
+                return planned
+            return CommandObject(intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                                 clarification_prompt="I could not safely build a complete automation plan. Please state the steps explicitly.", raw_text=raw_text)
 
         if re.fullmatch(r"(?:what(?:'s| is) (?:the )?active window|which (?:app|application|window) is active|identify active window|what app am i using)", normalized):
             return CommandObject(
@@ -208,6 +219,21 @@ class IntentParser:
                     confidence=1.0, raw_text=raw_text, model_version=None,
                 )
 
+        # Persistent memory and progress commands are deterministic and voice-first.
+        remember_match = re.fullmatch(r"remember(?: that)?\s+(.+)", original_command, re.IGNORECASE)
+        if remember_match:
+            fact = remember_match.group(1).strip()
+            key_slug = re.sub(r"[^a-z0-9]+", "_", fact.lower()).strip("_")[:72] or "user_note"
+            return CommandObject(intent="remember_fact", parameters={"memory_key": "note_" + key_slug, "memory_value": fact}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:what do you remember|show my saved memories|recall my memories)", normalized):
+            return CommandObject(intent="recall_memories", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:what (?:is|are) pending|what have we been working on|show task status|show my progress|what is the status of my tasks)", normalized):
+            return CommandObject(intent="get_task_status", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:what did we discuss recently|show recent conversation|recall our recent conversation)", normalized):
+            return CommandObject(intent="get_recent_history", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:continue|resume) (?:the )?(?:previous|last|pending) (?:automation|task)", normalized):
+            return CommandObject(intent="resume_automation", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+
         # 4. Neural inference via PyTorch IntentPredictor
         pred = self.predictor.predict(normalized)
 
@@ -269,7 +295,11 @@ class IntentParser:
             return None
         try:
             allowed = self.command_registry.all_intents() if self.command_registry is not None else {}
-            result = self.llm_router.interpret(normalized)
+            if self.assistant_memory is not None:
+                history = self.assistant_memory.recent_messages("default", limit=8)
+                result = self.llm_router.interpret(normalized, history=history)
+            else:
+                result = self.llm_router.interpret(normalized)
             # Do not let the model invent dictated text or an application/control target.
             if result.mode == "action_request" and result.intent == "type_text":
                 spoken_text = raw_text.strip()
@@ -298,6 +328,14 @@ class IntentParser:
                         clarification_prompt="Please state the exact application or control name you want me to use.",
                         raw_text=raw_text,
                     )
+            if result.mode == "action_request" and result.intent == "run_automation":
+                # Every user-facing target/value must be grounded in the spoken request.
+                for step in result.parameters.get("steps", []):
+                    for key in ("application", "control_name", "text", "query", "filename"):
+                        value = step.get("parameters", {}).get(key)
+                        if isinstance(value, str) and value.strip() and value.casefold() not in normalized.casefold():
+                            return CommandObject(intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                                clarification_prompt=f"I could not verify the requested {key.replace('_', ' ')} from your words. Please state it explicitly.", raw_text=raw_text)
             if result.mode == "conversation":
                 return CommandObject(
                     intent="conversation", parameters={}, confidence=1.0,

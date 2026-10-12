@@ -55,6 +55,24 @@ class CommandDispatcher:
         self.context = context or {}
 
     def dispatch(self, cmd: CommandObject) -> ExecutionResponse:
+        """Persist each voice turn around the authorized dispatch lifecycle."""
+        memory = self.context.get("assistant_memory")
+        raw_text = getattr(cmd, "raw_text", "").strip()
+        is_internal_step = raw_text.startswith("Approved automation task ")
+        if memory is not None and raw_text and not is_internal_step:
+            try:
+                memory.save_message("default", "user", raw_text)
+            except Exception:
+                logger.exception("Could not persist the incoming conversation turn")
+        response = self._dispatch(cmd)
+        if memory is not None and getattr(response, "spoken_feedback", "").strip() and not is_internal_step:
+            try:
+                memory.save_message("default", "assistant", response.spoken_feedback)
+            except Exception:
+                logger.exception("Could not persist the assistant response")
+        return response
+
+    def _dispatch(self, cmd: CommandObject) -> ExecutionResponse:
         """Executes the command through the secure pipeline."""
         raw_text = cmd.raw_text
         intent = cmd.intent
@@ -86,6 +104,10 @@ class CommandDispatcher:
         # 2. Handle Pending Action Confirmation
         if intent == "confirm_action":
             success, feedback, exec_result = self.confirmation_mgr.verify_and_execute(raw_text)
+            action_failed = bool(success and hasattr(exec_result, "success") and not exec_result.success)
+            if action_failed:
+                success = False
+                feedback = "The action was confirmed, but the application reported that it did not complete."
             self.audit.log(
                 command_text=raw_text,
                 intent=intent,
@@ -98,6 +120,26 @@ class CommandDispatcher:
                 result=feedback,
                 model_version=model_version,
             )
+            task_id = self.context.pop("automation_waiting_confirmation_task_id", None) if (success or action_failed) else None
+            engine = self.context.get("automation_engine")
+            if action_failed and task_id is not None and self.context.get("assistant_memory") is not None:
+                try:
+                    memory = self.context["assistant_memory"]
+                    task = memory.get_task(task_id)
+                    if task:
+                        memory.update_step(task_id, task["current_step"], "failed", feedback)
+                        memory.update_task(task_id, "failed", current_step=task["current_step"], error=feedback)
+                except Exception:
+                    logger.exception("Could not persist failed confirmed automation step")
+            if task_id is not None and engine is not None and success:
+                try:
+                    resumed = engine.resume(self.dispatch, confirmed_pending_step=True, task_id=task_id)
+                    feedback = feedback + " " + resumed.get("message", "")
+                    if resumed.get("waiting_confirmation"):
+                        self.context["automation_waiting_confirmation_task_id"] = resumed.get("task_id", task_id)
+                except Exception:
+                    logger.exception("Could not resume automation after confirmation")
+                    feedback += " The remaining automation could not resume; ask me for task status."
             return ExecutionResponse(
                 success=success,
                 spoken_feedback=feedback,
@@ -109,6 +151,16 @@ class CommandDispatcher:
         # 3. Handle Explicit Cancellation
         if intent == "cancel_action":
             ok, msg = self.confirmation_mgr.cancel()
+            task_id = self.context.pop("automation_waiting_confirmation_task_id", None)
+            memory = self.context.get("assistant_memory")
+            if task_id is not None and memory is not None:
+                try:
+                    task = memory.get_task(task_id)
+                    if task and task["status"] == "waiting_confirmation":
+                        memory.update_step(task_id, task["current_step"], "skipped", "Cancelled by user.")
+                        memory.update_task(task_id, "cancelled", current_step=task["current_step"], error="Cancelled by user.")
+                except Exception:
+                    logger.exception("Could not mark cancelled automation task")
             feedback = msg if ok else "Action cancelled. Returning to idle."
             self.audit.log(
                 command_text=raw_text,
@@ -196,7 +248,36 @@ class CommandDispatcher:
                 success=False, spoken_feedback=feedback, intent=intent, error="Permission denied"
             )
 
-        # 6. Resolve Plugin Handler
+        # 6. Handle orchestrated automation after registry and permission validation.
+        if intent == "run_automation":
+            engine = self.context.get("automation_engine")
+            if engine is None:
+                return ExecutionResponse(False, "Automation engine is unavailable.", intent=intent)
+            try:
+                result = engine.start(raw_text[:240], params.get("steps", []), self.dispatch)
+                if result.get("waiting_confirmation"):
+                    self.context["automation_waiting_confirmation_task_id"] = result.get("task_id")
+                self.audit.log(command_text=raw_text, intent=intent, confidence=conf,
+                    permission_level=meta.permission_level.value, authorized=True,
+                    status="AWAITING_CONFIRMATION" if result.get("waiting_confirmation") else ("COMPLETED" if result.get("success") else "FAILED"),
+                    result=result.get("message", "Automation finished."), model_version=model_version)
+                return ExecutionResponse(bool(result.get("success")), result.get("message", "Automation finished."),
+                    intent=intent, parameters=params, data=result,
+                    requires_confirmation=bool(result.get("waiting_confirmation")))
+            except (ValueError, TypeError) as exc:
+                return ExecutionResponse(False, "I rejected that automation plan because it was invalid or unsafe.", intent=intent, error=str(exc))
+
+        if intent == "resume_automation":
+            engine = self.context.get("automation_engine")
+            if engine is None:
+                return ExecutionResponse(False, "Automation engine is unavailable.", intent=intent)
+            result = engine.resume(self.dispatch)
+            if result.get("waiting_confirmation"):
+                self.context["automation_waiting_confirmation_task_id"] = result.get("task_id")
+            return ExecutionResponse(bool(result.get("success")), result.get("message", "Automation resume finished."), intent=intent, data=result,
+                requires_confirmation=bool(result.get("waiting_confirmation")))
+
+        # 7. Resolve Plugin Handler
         plugin = self.plugins.get_plugin_for_intent(intent)
         if not plugin:
             feedback = f"No execution plugin available for '{intent}'."

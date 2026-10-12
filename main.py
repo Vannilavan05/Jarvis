@@ -21,6 +21,7 @@ from ai.trainer import ModelTrainer
 from ai.local_llm import LocalLLMRouter, OllamaLocalRuntime
 from config import DATABASE_PATH, LOGS_DIR, SETTINGS_PATH
 from execution.command_registry import CommandRegistry
+from execution.automation_engine import AutomationEngine
 from execution.dispatcher import CommandDispatcher
 from execution.plugin_manager import PluginManager
 from nlp.intent_parser import IntentParser
@@ -28,6 +29,7 @@ from security.audit_logger import AuditLogger
 from security.confirmation_manager import ConfirmationManager
 from security.permissions import PermissionLevel
 from storage.database import DatabaseManager
+from storage.assistant_memory import AssistantMemory
 from storage.settings_store import SettingsStore
 from storage.training_store import TrainingStore
 from ui.main_window import JarvisMainWindow
@@ -60,6 +62,7 @@ def initialize_system():
     # 1. Database & Settings
     db = DatabaseManager(DATABASE_PATH)
     settings = SettingsStore(SETTINGS_PATH)
+    assistant_memory = AssistantMemory(db) if settings.get("assistant_memory_enabled", True) else None
 
     # 2. Dataset & Baseline Seeding
     training_store = TrainingStore(db)
@@ -99,6 +102,7 @@ def initialize_system():
         confidence_threshold=confidence_thresh,
         llm_router=llm_router,
         command_registry=cmd_registry,
+        assistant_memory=assistant_memory,
     )
 
     # 5. Security & Confirmation
@@ -112,11 +116,15 @@ def initialize_system():
 
     context = {
         "settings": settings,
+        "assistant_memory": assistant_memory,
         "training_store": training_store,
         "model_registry": model_registry,
         "predictor": predictor,
         "db_manager": db,
     }
+
+    automation_engine = AutomationEngine(assistant_memory, cmd_registry) if assistant_memory is not None else None
+    context["automation_engine"] = automation_engine
 
     dispatcher = CommandDispatcher(
         command_registry=cmd_registry,
