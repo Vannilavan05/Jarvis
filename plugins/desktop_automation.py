@@ -125,7 +125,7 @@ class DesktopAutomationPlugin(BasePlugin):
                     return PluginExecutionResult(success=False, spoken_response="Provide text of 1 to 4000 characters.")
                 # Refuse typing into password fields when UI Automation exposes that metadata.
                 try:
-                    focused = desktop.get_focus()
+                    focused = window.get_focus()
                     if focused and (focused.element_info.control_type == "Edit"):
                         auto_id = (focused.element_info.automation_id or "").lower()
                         name = (focused.element_info.name or "").lower()
