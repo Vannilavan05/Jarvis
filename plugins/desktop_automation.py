@@ -125,10 +125,16 @@ class DesktopAutomationPlugin(BasePlugin):
                     return PluginExecutionResult(success=False, spoken_response="Provide text of 1 to 4000 characters.")
                 # Refuse typing into password fields when UI Automation exposes that metadata.
                 try:
-                    focused = window.get_focus()
-                    if focused and (focused.element_info.control_type == "Edit"):
-                        auto_id = (focused.element_info.automation_id or "").lower()
-                        name = (focused.element_info.name or "").lower()
+                    focused = [
+                        control for control in window.descendants()
+                        if bool(getattr(control.element_info, "has_keyboard_focus", False))
+                    ]
+                    if len(focused) != 1:
+                        return PluginExecutionResult(success=False, spoken_response="I cannot verify the focused control, so I did not type.")
+                    element = focused[0].element_info
+                    if element.control_type == "Edit":
+                        auto_id = (element.automation_id or "").lower()
+                        name = (element.name or "").lower()
                         if "password" in auto_id or "password" in name:
                             return PluginExecutionResult(success=False, spoken_response="For safety, I will not type into a password field.")
                 except Exception:
