@@ -173,6 +173,11 @@ class IntentParser:
                     intent="press_hotkey", parameters={"keys": shortcut}, confidence=1.0,
                     raw_text=raw_text, model_version=None,
                 )
+            return CommandObject(
+                intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                clarification_prompt="That keyboard shortcut is not on Jarvis's safe shortcut list.",
+                raw_text=raw_text, model_version=None,
+            )
 
         click_match = re.fullmatch(
             r"(?:click|select)\s+(?:the\s+)?(.+?)(?:\s+(button|menu item|tab|checkbox|radio button|link|list item))?",
