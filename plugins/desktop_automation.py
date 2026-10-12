@@ -55,6 +55,23 @@ class DesktopAutomationPlugin(BasePlugin):
             "press_hotkey": PermissionLevel.STANDARD,
         }
 
+    def capture_target(self, intent: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Capture the target window before confirmation so focus changes cannot redirect a click."""
+        if intent != "click_ui_control":
+            return dict(parameters)
+        desktop = self._desktop()
+        active = desktop.get_active()
+        if active is None or not active.exists():
+            raise RuntimeError("No active application window could be identified.")
+        title = (active.window_text() or "").strip()
+        process_id = active.process_id()
+        if not title or not isinstance(process_id, int) or process_id <= 0:
+            raise RuntimeError("The active window cannot be identified safely.")
+        captured = dict(parameters)
+        captured["expected_window_title"] = title
+        captured["expected_process_id"] = process_id
+        return captured
+
     def _desktop(self):
         if platform.system() != "Windows":
             raise RuntimeError("System-wide UI Automation currently requires Windows.")
@@ -67,9 +84,15 @@ class DesktopAutomationPlugin(BasePlugin):
     def execute(self, intent: str, parameters: Dict[str, Any], context: Dict[str, Any]) -> PluginExecutionResult:
         try:
             desktop = self._desktop()
-            window = desktop.get_active()
+            if intent == "click_ui_control" and parameters.get("expected_window_title") and parameters.get("expected_process_id"):
+                window = desktop.window(
+                    title=parameters["expected_window_title"],
+                    process=int(parameters["expected_process_id"]),
+                ).wrapper_object()
+            else:
+                window = desktop.get_active()
             if window is None or not window.exists():
-                return PluginExecutionResult(success=False, spoken_response="I could not identify the active application window.")
+                return PluginExecutionResult(success=False, spoken_response="I could not identify the target application window.")
 
             if intent == "get_active_window":
                 title = (window.window_text() or "").strip()
