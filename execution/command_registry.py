@@ -78,3 +78,4 @@ class CommandRegistry:
         self.register("get_task_status", "Reports saved automation task progress", [], PermissionLevel.READ_ONLY)
         self.register("get_recent_history", "Reads recent saved conversation history", [], PermissionLevel.READ_ONLY)
         self.register("run_automation", "Executes a validated sequence of approved actions", ["steps"], PermissionLevel.STANDARD)
+        self.register("resume_automation", "Resumes a previously paused automation task", [], PermissionLevel.STANDARD)
