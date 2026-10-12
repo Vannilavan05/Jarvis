@@ -95,8 +95,8 @@ class ConfirmationManager:
         phrase_lower = confirmation_phrase.strip().lower()
         # The parser preserves the raw utterance for audit logs, so remove only the
         # configured wake-word forms here before applying exact phrase matching.
-        phrase_lower = re.sub(r"^(?:hey\\s+jarvis|okay\\s+jarvis|jarvis)\\s*[, :]?\\s*", "", phrase_lower)
-        phrase_lower = re.sub(r"\\s*[, :]?\\s*jarvis$", "", phrase_lower).strip()
+        phrase_lower = re.sub(r"^(?:hey\s+jarvis|okay\s+jarvis|jarvis)\s*[, :]?\s*", "", phrase_lower)
+        phrase_lower = re.sub(r"\s*[, :]?\s*jarvis$", "", phrase_lower).strip()
 
         # Match complete phrases only. Substring matching could treat "notebook" as "no".
         cancel_phrases = {"cancel", "cancel action", "cancel pending action", "abort", "no", "deny", "stop"}
