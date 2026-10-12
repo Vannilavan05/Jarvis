@@ -76,7 +76,8 @@ class AudioCaptureEngine:
             self.amplitude_callback(self.latest_rms)
 
         # Convert to 16-bit PCM bytes for speech recognition engines
-        pcm_16 = (indata * 32767).astype(np.int16).tobytes()
+        # Clip first: loud peaks above 1.0 would otherwise wrap around and distort the audio.
+        pcm_16 = (np.clip(indata, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
         self.audio_queue.put(pcm_16)
 
     def start(self) -> bool:
@@ -112,13 +113,16 @@ class AudioCaptureEngine:
             except Exception as e:
                 logger.debug(f"Error closing stream: {e}")
             self.stream = None
-        # Clear residual queue
-        while not self.audio_queue.empty():
+        self.drain()
+        logger.info("Audio capture stopped.")
+
+    def drain(self):
+        """Discards any buffered audio chunks."""
+        while True:
             try:
                 self.audio_queue.get_nowait()
             except queue.Empty:
                 break
-        logger.info("Audio capture stopped.")
 
     def get_chunk(self, timeout: float = 0.5) -> Optional[bytes]:
         """Retrieves next captured 16-bit PCM chunk from queue."""

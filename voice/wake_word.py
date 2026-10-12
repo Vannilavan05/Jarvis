@@ -3,11 +3,15 @@ Provides local offline wake-word spotting and command detachment.
 """
 
 import re
+from difflib import SequenceMatcher
 from typing import List, Optional, Tuple
 
 
 class WakeWordDetector:
     """Detects configurable wake words locally in speech transcripts."""
+
+    # Minimum similarity (0-1) for a mis-transcribed wake word at the start of an utterance
+    FUZZY_THRESHOLD = 0.8
 
     def __init__(self, wake_word: str = "jarvis", aliases: Optional[List[str]] = None):
         self.wake_word = wake_word.strip().lower()
@@ -30,7 +34,9 @@ class WakeWordDetector:
         if not cleaned:
             return False, ""
 
-        for alias in sorted(self.aliases, key=len, reverse=True):
+        ordered_aliases = sorted(self.aliases, key=len, reverse=True)
+
+        for alias in ordered_aliases:
             # Check if alias appears at the start
             pattern = rf"^{re.escape(alias)}\b\s*[,:]?\s*(.*)$"
             match = re.match(pattern, cleaned)
@@ -43,6 +49,19 @@ class WakeWordDetector:
             if re.search(standalone_pattern, cleaned):
                 # Strip out the wake word
                 remainder = re.sub(standalone_pattern, "", cleaned).strip()
+                remainder = re.sub(r"^[,\s:]+", "", remainder)
+                return True, remainder
+
+        # Speech models often mishear the wake word slightly ("jervis", "jarvus"); tolerate that at the
+        # start of the utterance only, so ordinary words later in a sentence never trigger it.
+        words = cleaned.split()
+        for alias in ordered_aliases:
+            n = len(alias.split())
+            if len(words) < n:
+                continue
+            heard = " ".join(words[:n]).strip(",:;.!?")
+            if SequenceMatcher(None, heard, alias).ratio() >= self.FUZZY_THRESHOLD:
+                remainder = " ".join(words[n:]).strip()
                 remainder = re.sub(r"^[,\s:]+", "", remainder)
                 return True, remainder
 

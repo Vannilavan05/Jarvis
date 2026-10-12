@@ -45,6 +45,9 @@ class AudioManager:
         self.wake_detector = wake_detector or WakeWordDetector()
         self.recognizer = speech_recognizer or OfflineSpeechRecognizer()
         self.speech_output = speech_output or SpeechOutputEngine(on_speaking_state_changed=self._handle_speaking_state)
+        # An externally built TTS engine has no state callback; hook ours in so state/loopback logic works.
+        if speech_output is not None and getattr(speech_output, "on_speaking_state_changed", None) is None:
+            speech_output.on_speaking_state_changed = self._handle_speaking_state
 
         self.on_state_change = on_state_change
         self.on_transcript = on_transcript
@@ -52,6 +55,7 @@ class AudioManager:
         self.command_timeout_seconds = command_timeout_seconds
 
         self._state = VoiceState.IDLE
+        self._state_before_speaking = VoiceState.IDLE
         self._is_running = False
         self._paused = False
         self._worker_thread: Optional[threading.Thread] = None
@@ -63,6 +67,16 @@ class AudioManager:
     @property
     def state(self) -> VoiceState:
         return self._state
+
+    @property
+    def voice_ready(self) -> bool:
+        """True when speech-to-text is actually available (model loaded)."""
+        return bool(getattr(self.recognizer, "is_ready", False))
+
+    @property
+    def voice_status(self) -> str:
+        """Explains why voice recognition is unavailable, or '' when it is working."""
+        return "" if self.voice_ready else getattr(self.recognizer, "status_message", "") or "Speech recognizer not ready."
 
     def set_state(self, new_state: VoiceState):
         if self._state != new_state:
@@ -77,17 +91,27 @@ class AudioManager:
     def _handle_speaking_state(self, is_speaking: bool):
         """Suppresses microphone processing when Jarvis is talking to prevent loopback."""
         if is_speaking:
+            if self._state != VoiceState.SPEAKING:
+                self._state_before_speaking = self._state
             self.set_state(VoiceState.SPEAKING)
         else:
-            if not self._paused and self._is_running:
-                self.set_state(VoiceState.LISTENING_FOR_WAKE)
+            if self._paused:
+                self.set_state(VoiceState.PAUSED)
+            elif not self._is_running:
+                self.set_state(VoiceState.IDLE)
+            elif self._state_before_speaking == VoiceState.LISTENING_FOR_COMMAND:
+                # "At your service" was spoken; keep waiting for the actual command.
+                self.set_state(VoiceState.LISTENING_FOR_COMMAND)
             else:
-                self.set_state(VoiceState.PAUSED if self._paused else VoiceState.IDLE)
+                self.set_state(VoiceState.LISTENING_FOR_WAKE)
 
     def start(self) -> bool:
         """Starts audio capture and initiates background processing thread."""
         if self._is_running:
             return True
+
+        if not self.voice_ready:
+            logger.error(f"Voice recognition is unavailable: {self.voice_status}")
 
         if not self.capture.start():
             self.set_state(VoiceState.ERROR)
@@ -134,66 +158,108 @@ class AudioManager:
         if self.on_command_ready:
             self.on_command_ready(text)
 
+    # ------------------------------------------------------------------ internals
+
+    @staticmethod
+    def _safe_call(callback: Optional[Callable], *args):
+        """Runs a UI/dispatcher callback without letting its errors kill the audio thread."""
+        if callback is None:
+            return
+        try:
+            callback(*args)
+        except Exception:
+            logger.exception("Error in voice callback")
+
+    def _emit_command(self, command_text: str):
+        """Hands a recognized command to the application and returns to wake-word listening."""
+        self.set_state(VoiceState.PROCESSING)
+        self._safe_call(self.on_transcript, command_text, True)
+        self._safe_call(self.on_command_ready, command_text)
+        self._accumulated_command = ""
+        self.recognizer.reset()
+        self.set_state(VoiceState.LISTENING_FOR_WAKE)
+
+    def _handle_wake_chunk(self, chunk: bytes):
+        is_final, transcript = self.recognizer.process_audio_chunk(chunk)
+        if not transcript:
+            return
+
+        # Live text for the UI (partials and finals).
+        self._safe_call(self.on_transcript, transcript, False)
+
+        # Only act on a *finished* utterance. Acting on partials fired on the bare word "jarvis"
+        # before the rest of "jarvis open chrome" was spoken, so the command was thrown away.
+        if not is_final:
+            return
+
+        is_detected, cmd_remainder = self.wake_detector.detect_in_text(transcript)
+        if not is_detected:
+            return
+
+        logger.info(f"Wake word detected! Remainder: '{cmd_remainder}'")
+        self.recognizer.reset()
+
+        if cmd_remainder:
+            # Wake word and command in one breath, e.g. "Jarvis open chrome"
+            self._emit_command(cmd_remainder)
+        else:
+            # Wake word alone: start listening for the command
+            self._accumulated_command = ""
+            self._command_start_time = time.time()
+            self.set_state(VoiceState.LISTENING_FOR_COMMAND)
+            self.speech_output.speak("At your service, sir.")
+
+    def _handle_command_chunk(self, chunk: bytes):
+        if time.time() - self._command_start_time > self.command_timeout_seconds:
+            logger.info("Command listening timed out.")
+            self._accumulated_command = ""
+            self.recognizer.reset()
+            self.set_state(VoiceState.LISTENING_FOR_WAKE)
+            return
+
+        is_final, transcript = self.recognizer.process_audio_chunk(chunk)
+        if transcript:
+            # Still hearing speech, so keep the listening window open.
+            self._command_start_time = time.time()
+            self._accumulated_command = transcript
+            if not is_final:
+                self._safe_call(self.on_transcript, transcript, False)
+
+        if is_final and self._accumulated_command:
+            self._emit_command(self._accumulated_command)
+
     def _processing_loop(self):
         """Continuous audio processing loop."""
+        was_muted = False
         while self._is_running:
-            # 1. Check if paused or muted due to Jarvis speaking
-            if self._paused or self.speech_output.is_speaking:
-                time.sleep(0.05)
-                continue
-
-            chunk = self.capture.get_chunk(timeout=0.1)
-            if chunk is None:
-                continue
-
-            # 2. State-dependent processing
-            if self._state == VoiceState.LISTENING_FOR_WAKE:
-                is_final, transcript = self.recognizer.process_audio_chunk(chunk)
-                text_to_check = transcript if is_final else transcript
-
-                if text_to_check:
-                    if self.on_transcript:
-                        self.on_transcript(text_to_check, False)
-
-                    is_detected, cmd_remainder = self.wake_detector.detect_in_text(text_to_check)
-                    if is_detected:
-                        logger.info(f"Wake word detected! Remainder: '{cmd_remainder}'")
-                        self.recognizer.reset()
-
-                        if cmd_remainder:
-                            # User said wake word and command together, e.g. "Jarvis open chrome"
-                            self.set_state(VoiceState.PROCESSING)
-                            if self.on_transcript:
-                                self.on_transcript(cmd_remainder, True)
-                            if self.on_command_ready:
-                                self.on_command_ready(cmd_remainder)
-                            self.set_state(VoiceState.LISTENING_FOR_WAKE)
-                        else:
-                            # Wake word alone spoken, activate command listening
-                            self.set_state(VoiceState.LISTENING_FOR_COMMAND)
-                            self._command_start_time = time.time()
-                            self._accumulated_command = ""
-                            self.speech_output.speak("At your service, sir.")
-
-            elif self._state == VoiceState.LISTENING_FOR_COMMAND:
-                # Check for command timeout
-                if time.time() - self._command_start_time > self.command_timeout_seconds:
-                    logger.info("Command listening timed out.")
-                    self.set_state(VoiceState.LISTENING_FOR_WAKE)
+            try:
+                # 1. Ignore the mic while paused or while Jarvis is talking (prevents hearing itself).
+                if self._paused or self.speech_output.is_speaking:
+                    # Discard audio instead of letting it pile up; otherwise Jarvis's own voice
+                    # (which contains the wake word) is transcribed the moment it stops talking.
+                    self.capture.drain()
+                    was_muted = True
+                    time.sleep(0.05)
                     continue
 
-                is_final, transcript = self.recognizer.process_audio_chunk(chunk)
-                if transcript:
-                    if self.on_transcript:
-                        self.on_transcript(transcript, False)
-                    self._accumulated_command = transcript
-
-                if is_final and self._accumulated_command:
-                    final_text = self._accumulated_command
-                    self.set_state(VoiceState.PROCESSING)
-                    if self.on_transcript:
-                        self.on_transcript(final_text, True)
-                    if self.on_command_ready:
-                        self.on_command_ready(final_text)
+                if was_muted:
+                    self.capture.drain()
                     self.recognizer.reset()
-                    self.set_state(VoiceState.LISTENING_FOR_WAKE)
+                    if self._state == VoiceState.LISTENING_FOR_COMMAND:
+                        # Give the user the full window *after* the acknowledgement finishes.
+                        self._command_start_time = time.time()
+                    was_muted = False
+
+                chunk = self.capture.get_chunk(timeout=0.1)
+                if chunk is None:
+                    continue
+
+                # 2. State-dependent processing
+                if self._state == VoiceState.LISTENING_FOR_COMMAND:
+                    self._handle_command_chunk(chunk)
+                else:
+                    self._handle_wake_chunk(chunk)
+            except Exception:
+                # Never let one bad chunk/callback silently end voice recognition.
+                logger.exception("Unexpected error in audio processing loop")
+                time.sleep(0.1)

@@ -159,8 +159,14 @@ def main():
         audio_mgr.select_device(args.device)
 
     # Start audio capture
-    audio_mgr.start()
-    audio_mgr.speak("Jarvis online and systems fully functional.")
+    mic_ok = audio_mgr.start()
+    if not mic_ok:
+        print("\n[WARNING] Could not open the microphone. Check the device with --device <index>.\n")
+    if not audio_mgr.voice_ready:
+        print(f"\n[WARNING] Voice commands are disabled: {audio_mgr.voice_status}\n")
+        audio_mgr.speak("Jarvis online, but speech recognition is unavailable. Check the log for details.")
+    else:
+        audio_mgr.speak("Jarvis online and systems fully functional.")
 
     if args.cli:
         print("\n=== JARVIS CLI VOICE MODE ===")
@@ -200,6 +206,8 @@ def main():
             settings_store=settings,
         )
         window.show()
+        if not audio_mgr.voice_ready:
+            window.txt_transcript.appendPlainText(f"[SYSTEM] Voice commands are disabled: {audio_mgr.voice_status}\n")
 
         try:
             exit_code = app.exec()
