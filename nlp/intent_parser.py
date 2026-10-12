@@ -208,6 +208,30 @@ class IntentParser:
                     confidence=1.0, raw_text=raw_text, model_version=None,
                 )
 
+        # Persistent memory and progress commands are deterministic and voice-first.
+        remember_match = re.fullmatch(r"remember(?: that)?\\s+(.+)", original_command, re.IGNORECASE)
+        if remember_match:
+            fact = remember_match.group(1).strip()
+            key_slug = re.sub(r"[^a-z0-9]+", "_", fact.lower()).strip("_")[:72] or "user_note"
+            return CommandObject(intent="remember_fact", parameters={"memory_key": "note_" + key_slug, "memory_value": fact}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:what do you remember|show my saved memories|recall my memories)", normalized):
+            return CommandObject(intent="recall_memories", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:what (?:is|are) pending|what have we been working on|show task status|show my progress|what is the status of my tasks)", normalized):
+            return CommandObject(intent="get_task_status", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:what did we discuss recently|show recent conversation|recall our recent conversation)", normalized):
+            return CommandObject(intent="get_recent_history", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+        if re.fullmatch(r"(?:continue|resume) (?:the )?(?:previous|last|pending) (?:automation|task)", normalized):
+            return CommandObject(intent="resume_automation", parameters={}, confidence=1.0, raw_text=raw_text, model_version=None)
+
+        # Explicit multi-step requests must go through the local planner; never silently
+        # reduce a compound request to one guessed action from the legacy classifier.
+        if re.search(r"\\b(?:automate|then|after that|and then|step by step)\\b", normalized):
+            planned = self._try_local_llm(raw_text, normalized)
+            if planned is not None and planned.intent == "run_automation":
+                return planned
+            return CommandObject(intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                                 clarification_prompt="I could not safely build a complete automation plan. Please state the steps explicitly.", raw_text=raw_text)
+
         # 4. Neural inference via PyTorch IntentPredictor
         pred = self.predictor.predict(normalized)
 
@@ -298,6 +322,14 @@ class IntentParser:
                         clarification_prompt="Please state the exact application or control name you want me to use.",
                         raw_text=raw_text,
                     )
+            if result.mode == "action_request" and result.intent == "run_automation":
+                # Every user-facing target/value must be grounded in the spoken request.
+                for step in result.parameters.get("steps", []):
+                    for key in ("application", "control_name", "text", "query", "filename"):
+                        value = step.get("parameters", {}).get(key)
+                        if isinstance(value, str) and value.strip() and value.casefold() not in normalized.casefold():
+                            return CommandObject(intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                                clarification_prompt=f"I could not verify the requested {key.replace('_', ' ')} from your words. Please state it explicitly.", raw_text=raw_text)
             if result.mode == "conversation":
                 return CommandObject(
                     intent="conversation", parameters={}, confidence=1.0,
