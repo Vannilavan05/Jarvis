@@ -57,13 +57,15 @@ class CommandDispatcher:
     def dispatch(self, cmd: CommandObject) -> ExecutionResponse:
         """Persist each voice turn around the authorized dispatch lifecycle."""
         memory = self.context.get("assistant_memory")
-        if memory is not None and getattr(cmd, "raw_text", "").strip():
+        raw_text = getattr(cmd, "raw_text", "").strip()
+        is_internal_step = raw_text.startswith("Approved automation task ")
+        if memory is not None and raw_text and not is_internal_step:
             try:
-                memory.save_message("default", "user", cmd.raw_text)
+                memory.save_message("default", "user", raw_text)
             except Exception:
                 logger.exception("Could not persist the incoming conversation turn")
         response = self._dispatch(cmd)
-        if memory is not None and getattr(response, "spoken_feedback", "").strip():
+        if memory is not None and getattr(response, "spoken_feedback", "").strip() and not is_internal_step:
             try:
                 memory.save_message("default", "assistant", response.spoken_feedback)
             except Exception:
@@ -102,6 +104,9 @@ class CommandDispatcher:
         # 2. Handle Pending Action Confirmation
         if intent == "confirm_action":
             success, feedback, exec_result = self.confirmation_mgr.verify_and_execute(raw_text)
+            if success and hasattr(exec_result, "success") and not exec_result.success:
+                success = False
+                feedback = "The action was confirmed, but the application reported that it did not complete."
             self.audit.log(
                 command_text=raw_text,
                 intent=intent,
@@ -136,6 +141,16 @@ class CommandDispatcher:
         # 3. Handle Explicit Cancellation
         if intent == "cancel_action":
             ok, msg = self.confirmation_mgr.cancel()
+            task_id = self.context.pop("automation_waiting_confirmation_task_id", None)
+            memory = self.context.get("assistant_memory")
+            if task_id is not None and memory is not None:
+                try:
+                    task = memory.get_task(task_id)
+                    if task and task["status"] == "waiting_confirmation":
+                        memory.update_step(task_id, task["current_step"], "skipped", "Cancelled by user.")
+                        memory.update_task(task_id, "cancelled", current_step=task["current_step"], error="Cancelled by user.")
+                except Exception:
+                    logger.exception("Could not mark cancelled automation task")
             feedback = msg if ok else "Action cancelled. Returning to idle."
             self.audit.log(
                 command_text=raw_text,
