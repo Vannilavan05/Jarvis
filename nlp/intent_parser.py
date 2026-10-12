@@ -193,7 +193,10 @@ class IntentParser:
             result = self.llm_router.interpret(normalized)
             # Do not let the model invent dictated text or an application/control target.
             if result.mode == "action_request" and result.intent == "type_text":
-                dictated = re.match(r"^(?:type|enter|write|input|insert)\s+(.+)$", normalized, re.IGNORECASE)
+                spoken_text = raw_text.strip()
+                spoken_text = re.sub(r"^(?:hey\s+jarvis|okay\s+jarvis|jarvis)\s*[, :]?\s*", "", spoken_text, flags=re.IGNORECASE)
+                spoken_text = re.sub(r"^(?:please|could\s+you|can\s+you|would\s+you)\s+", "", spoken_text, flags=re.IGNORECASE)
+                dictated = re.match(r"^(?:type|enter|write|input|insert)\s+(.+)$", spoken_text, re.IGNORECASE)
                 if not dictated:
                     return CommandObject(
                         intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
