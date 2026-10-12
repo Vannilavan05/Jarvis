@@ -23,6 +23,6 @@ class VoiceAuthenticator:
         if audio_data is None or len(audio_data) == 0:
             return False, 0.0, "Missing audio samples for speaker verification."
 
-        # Biometric score hook (placeholder for local neural acoustic verification)
-        confidence = 0.95
-        return True, confidence, f"Speaker verified as {self.enrolled_speaker_id} with score {confidence:.2f}"
+        # Fail closed: this repository does not yet contain a real speaker-embedding
+        # model or enrolled biometric template. Audio presence alone is not identity.
+        return False, 0.0, "Speaker verification is required but no real verifier is configured."

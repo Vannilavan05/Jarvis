@@ -153,6 +153,11 @@ class CommandDispatcher:
             feedback = "Listening paused." if intent == "pause_listening" else "Listening resumed."
             return ExecutionResponse(success=True, spoken_feedback=feedback, intent=intent, parameters=params)
 
+        # LLM conversation output is display-only; it never reaches an execution plugin.
+        if intent == "conversation":
+            feedback = cmd.clarification_prompt or "I'm here. What would you like to do?"
+            return ExecutionResponse(success=True, spoken_feedback=feedback, intent=intent, parameters={})
+
         # 5. Intent Registry & Authorization Validation
         meta = self.registry.get(intent)
         if not meta:

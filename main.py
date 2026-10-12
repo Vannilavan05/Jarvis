@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import QApplication
 from ai.model_registry import ModelRegistry
 from ai.predictor import IntentPredictor
 from ai.trainer import ModelTrainer
+from ai.local_llm import LocalLLMRouter, OllamaLocalRuntime
 from config import DATABASE_PATH, LOGS_DIR, SETTINGS_PATH
 from execution.command_registry import CommandRegistry
 from execution.dispatcher import CommandDispatcher
@@ -78,7 +79,27 @@ def initialize_system():
     # 4. Neural Intent Predictor & NLP Parser
     confidence_thresh = settings.get("nlp_confidence_threshold", 0.65)
     predictor = IntentPredictor(registry=model_registry, confidence_threshold=confidence_thresh)
-    intent_parser = IntentParser(predictor=predictor, confidence_threshold=confidence_thresh)
+
+    # 4b. Optional fully-local LLM fallback; no cloud endpoint or fallback is configured.
+    cmd_registry = CommandRegistry()
+    llm_router = None
+    if settings.get("local_llm_enabled", False):
+        try:
+            runtime = OllamaLocalRuntime(
+                model=settings.get("local_llm_model", "qwen2.5:3b"),
+                base_url=settings.get("local_llm_base_url", "http://127.0.0.1:11434"),
+                timeout_seconds=float(settings.get("local_llm_timeout_seconds", 8)),
+            )
+            llm_router = LocalLLMRouter(runtime, cmd_registry.all_intents().keys())
+            logger.info("Local LLM fallback enabled with model %s.", runtime.model)
+        except Exception:
+            logger.exception("Could not initialize local LLM; continuing with PyTorch-only parsing.")
+    intent_parser = IntentParser(
+        predictor=predictor,
+        confidence_threshold=confidence_thresh,
+        llm_router=llm_router,
+        command_registry=cmd_registry,
+    )
 
     # 5. Security & Confirmation
     confirm_timeout = settings.get("confirmation_timeout_seconds", 30.0)
@@ -86,7 +107,6 @@ def initialize_system():
     audit = AuditLogger(db_manager=db)
 
     # 6. Execution & Plugins
-    cmd_registry = CommandRegistry()
     enabled_plugins = settings.get("plugins_enabled", None)
     plugin_mgr = PluginManager(enabled_plugin_ids=enabled_plugins)
 

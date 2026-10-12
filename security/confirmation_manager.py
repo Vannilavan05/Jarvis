@@ -93,17 +93,16 @@ class ConfirmationManager:
 
         phrase_lower = confirmation_phrase.strip().lower()
 
-        # Check explicit cancellation
-        if any(w in phrase_lower for w in ["cancel", "abort", "no", "deny", "stop"]):
+        # Match complete phrases only. Substring matching could treat "notebook" as "no".
+        cancel_phrases = {"cancel", "cancel action", "cancel pending action", "abort", "no", "deny", "stop"}
+        if phrase_lower in cancel_phrases:
             self.cancel()
             return False, "Operation cancelled by user request.", None
 
-        # Verify confirmation intent
-        valid_confirm_tokens = ["confirm", "yes confirm", "authorize", "proceed", "yes, confirm"]
-        is_confirmed = any(token in phrase_lower for token in valid_confirm_tokens)
-
-        # Check if the confirmation mentions the intent specifically or generally
-        if not is_confirmed and pending.intent.replace("_", " ") not in phrase_lower:
+        # Only an explicit confirmation phrase can authorize the pending operation.
+        # Mentioning an intent or target by itself is never consent.
+        valid_confirm_phrases = {"confirm", "yes confirm", "yes, confirm", "authorize", "proceed"}
+        if phrase_lower not in valid_confirm_phrases:
             return False, "Confirmation unclear. Please say 'confirm' to proceed or 'cancel' to abort.", None
 
         # Execute the confirmed action

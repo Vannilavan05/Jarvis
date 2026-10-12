@@ -283,3 +283,25 @@ The compiled application and all dependencies will be located in the `dist/Jarvi
 3. **Model Retraining Performance**:
    - Jarvis uses PyTorch running on CPU by default (or CUDA if an NVIDIA GPU is available).
    - Training 30 epochs on the baseline dataset typically completes in under 3 seconds in the background without interrupting audio listening.
+---
+
+## 10. Optional Offline LLM for Natural-Language Understanding
+
+Jarvis keeps the existing PyTorch intent classifier. When that classifier is uncertain, an optional local Ollama model can help interpret ordinary conversation or propose a registered command. The LLM is not an execution engine: every proposed intent is schema-validated and still passes through Jarvis's command registry, permission checks, and confirmation manager. Sensitive intents (including deletion, shutdown/reboot, app termination, model rollback, training controls, and confirmation/cancellation) are not accepted from the LLM.
+
+1. Install [Ollama](https://ollama.com/) on this computer.
+2. Download a compact model locally, for example:
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+3. Confirm the local service responds:
+   ```bash
+   ollama run qwen2.5:3b
+   ```
+4. In `config/settings.json`, review `local_llm_enabled`, `local_llm_model`, `local_llm_base_url`, and `local_llm_timeout_seconds`. The configured endpoint must remain on loopback (`127.0.0.1` / `localhost` / `::1`); the client has no cloud fallback.
+5. Start Jarvis normally. If Ollama is not available or its output is invalid, Jarvis falls back to the existing PyTorch parser and its clarification behavior.
+
+A 3B quantized model is a practical starting point for a 16 GB RAM machine, but actual memory use and latency depend on quantization, context size, and other applications. The model is downloaded once; inference is local thereafter.
+
+**Security note:** The built-in speaker-verification class is only a hook, not a trained biometric system. If `require_speaker_verification` is enabled without a real verifier, high-trust speaker verification now fails closed instead of pretending to authenticate the speaker. Do not treat voice recognition/transcription as proof of speaker identity.
+
