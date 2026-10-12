@@ -40,4 +40,4 @@ jobs:
           execution/command_registry.py
           execution/plugin_manager.py
       - name: Run local LLM and security tests
-        run: python -m pytest -q tests/test_local_llm.py tests/test_security_hardening.py tests/test_plugins.py
+        run: python -m pytest -q tests/test_local_llm.py tests/test_security_hardening.py tests/test_plugins.py tests/test_desktop_intent_parsing.py
