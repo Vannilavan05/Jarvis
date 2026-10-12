@@ -32,7 +32,8 @@
     "system_info",
     "system_controls",
     "model_management",
-    "custom_commands"
+    "custom_commands",
+    "desktop_automation"
   ],
   "approved_applications": {
     "chrome": "chrome",
