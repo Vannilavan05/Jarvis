@@ -132,13 +132,13 @@ class IntentParser:
         # 3. Deterministic desktop commands. The trained classifier predates these
         # intents, so route explicit, unambiguous desktop requests before neural inference.
         original_command = re.sub(
-            r"^(?:hey\\s+jarvis|okay\\s+jarvis|jarvis)\\s*[, :]?\\s*",
+            r"^(?:hey\s+jarvis|okay\s+jarvis|jarvis)\s*[, :]?\s*",
             "",
             raw_text.strip(),
             flags=re.IGNORECASE,
         )
         original_command = re.sub(
-            r"^(?:please|could\\s+you|can\\s+you|would\\s+you)\\s+",
+            r"^(?:please|could\s+you|can\s+you|would\s+you)\s+",
             "",
             original_command,
             flags=re.IGNORECASE,
@@ -150,7 +150,7 @@ class IntentParser:
                 raw_text=raw_text, model_version=None,
             )
 
-        typed_match = re.match(r"^(?:type|enter|write|input|insert)\\s+(.+)$", original_command, re.IGNORECASE)
+        typed_match = re.match(r"^(?:type|enter|write|input|insert)\s+(.+)$", original_command, re.IGNORECASE)
         if typed_match:
             dictated_text = typed_match.group(1).strip()
             if dictated_text:
@@ -159,7 +159,7 @@ class IntentParser:
                     raw_text=raw_text, model_version=None,
                 )
 
-        hotkey_match = re.fullmatch(r"(?:press|hit|use)\\s+(?:the\\s+)?(.+)", normalized)
+        hotkey_match = re.fullmatch(r"(?:press|hit|use)\s+(?:the\s+)?(.+)", normalized)
         if hotkey_match:
             shortcut = hotkey_match.group(1).strip().replace(" ", "")
             shortcut = shortcut.replace("pageup", "page up").replace("pagedown", "page down")
@@ -175,7 +175,7 @@ class IntentParser:
                 )
 
         click_match = re.fullmatch(
-            r"(?:click|select)\\s+(?:the\\s+)?(.+?)(?:\\s+(button|menu item|tab|checkbox|radio button|link|list item))?",
+            r"(?:click|select)\s+(?:the\s+)?(.+?)(?:\s+(button|menu item|tab|checkbox|radio button|link|list item))?",
             normalized,
         )
         if click_match:
@@ -193,7 +193,7 @@ class IntentParser:
                     confidence=1.0, raw_text=raw_text, model_version=None,
                 )
 
-        open_match = re.fullmatch(r"(?:open|launch|start|run)\\s+(?:the\\s+)?(.+)", normalized)
+        open_match = re.fullmatch(r"(?:open|launch|start|run)\s+(?:the\s+)?(.+)", normalized)
         if open_match:
             application = open_match.group(1).strip()
             if application:
