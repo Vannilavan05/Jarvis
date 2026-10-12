@@ -68,9 +68,13 @@ class IntentParser:
         self,
         predictor: Optional[IntentPredictor] = None,
         confidence_threshold: float = 0.65,
+        llm_router=None,
+        command_registry=None,
     ):
         self.predictor = predictor or IntentPredictor(confidence_threshold=confidence_threshold)
         self.confidence_mgr = ConfidenceManager(threshold=confidence_threshold)
+        self.llm_router = llm_router
+        self.command_registry = command_registry
 
     def normalize(self, text: str) -> str:
         """Strips assistant wake name and conversational prefixes."""
@@ -129,6 +133,9 @@ class IntentParser:
         pred = self.predictor.predict(normalized)
 
         if not pred.intent:
+            llm_command = self._try_local_llm(raw_text, normalized)
+            if llm_command is not None:
+                return llm_command
             return CommandObject(
                 intent="unknown",
                 parameters={},
@@ -147,6 +154,12 @@ class IntentParser:
         )
 
         params = EntityExtractor.extract(raw_text, pred.intent)
+
+        # Use the local LLM only when the existing PyTorch model is uncertain.
+        if not is_confident:
+            llm_command = self._try_local_llm(raw_text, normalized)
+            if llm_command is not None:
+                return llm_command
 
         # Validate mandatory parameters for specific intents
         if is_confident:
@@ -170,3 +183,41 @@ class IntentParser:
             raw_text=raw_text,
             model_version=pred.model_version,
         )
+
+    def _try_local_llm(self, raw_text: str, normalized: str) -> Optional[CommandObject]:
+        """Ask the configured local LLM only after deterministic/PyTorch parsing is uncertain."""
+        if self.llm_router is None:
+            return None
+        try:
+            allowed = self.command_registry.all_intents() if self.command_registry is not None else {}
+            result = self.llm_router.interpret(normalized)
+            if result.mode == "conversation":
+                return CommandObject(
+                    intent="conversation", parameters={}, confidence=1.0,
+                    is_ambiguous=False, clarification_prompt=result.response,
+                    raw_text=raw_text, model_version=None,
+                )
+            if result.mode == "clarification":
+                return CommandObject(
+                    intent="unknown", parameters={}, confidence=0.0,
+                    is_ambiguous=True, clarification_prompt=result.response,
+                    raw_text=raw_text, model_version=None,
+                )
+            if self.command_registry is not None and result.intent not in allowed:
+                return None
+            meta = allowed.get(result.intent) if allowed else None
+            if meta is not None:
+                missing = [key for key in meta.required_parameters if not result.parameters.get(key)]
+                if missing:
+                    return CommandObject(
+                        intent="unknown", parameters={}, confidence=0.0, is_ambiguous=True,
+                        clarification_prompt=f"I need more information to {result.intent.replace('_', ' ')}. Please specify {', '.join(missing)}.",
+                        raw_text=raw_text,
+                    )
+            return CommandObject(
+                intent=result.intent, parameters=result.parameters, confidence=0.75,
+                is_ambiguous=False, raw_text=raw_text, model_version=None,
+            )
+        except Exception as exc:
+            logger.warning("Local LLM unavailable or rejected output; using safe clarification: %s", exc)
+            return None
