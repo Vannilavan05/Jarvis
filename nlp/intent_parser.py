@@ -86,7 +86,7 @@ class IntentParser:
         cleaned = re.sub(r"\s*[,:]?\s*(?:jarvis)$", "", cleaned)
         # Remove politeness fillers
         cleaned = re.sub(r"^(?:please|could\s+you|can\s+you|would\s+you)\s+", "", cleaned)
-        return cleaned.strip()
+        return cleaned.strip().rstrip("?.!")
 
     def parse(self, raw_text: str) -> CommandObject:
         """Parses speech text into a structured CommandObject."""
