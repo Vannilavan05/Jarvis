@@ -104,7 +104,8 @@ class CommandDispatcher:
         # 2. Handle Pending Action Confirmation
         if intent == "confirm_action":
             success, feedback, exec_result = self.confirmation_mgr.verify_and_execute(raw_text)
-            if success and hasattr(exec_result, "success") and not exec_result.success:
+            action_failed = bool(success and hasattr(exec_result, "success") and not exec_result.success)
+            if action_failed:
                 success = False
                 feedback = "The action was confirmed, but the application reported that it did not complete."
             self.audit.log(
@@ -119,9 +120,18 @@ class CommandDispatcher:
                 result=feedback,
                 model_version=model_version,
             )
-            task_id = self.context.pop("automation_waiting_confirmation_task_id", None) if success else None
+            task_id = self.context.pop("automation_waiting_confirmation_task_id", None) if (success or action_failed) else None
             engine = self.context.get("automation_engine")
-            if task_id is not None and engine is not None:
+            if action_failed and task_id is not None and self.context.get("assistant_memory") is not None:
+                try:
+                    memory = self.context["assistant_memory"]
+                    task = memory.get_task(task_id)
+                    if task:
+                        memory.update_step(task_id, task["current_step"], "failed", feedback)
+                        memory.update_task(task_id, "failed", current_step=task["current_step"], error=feedback)
+                except Exception:
+                    logger.exception("Could not persist failed confirmed automation step")
+            if task_id is not None and engine is not None and success:
                 try:
                     resumed = engine.resume(self.dispatch, confirmed_pending_step=True, task_id=task_id)
                     feedback = feedback + " " + resumed.get("message", "")
