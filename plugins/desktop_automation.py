@@ -8,6 +8,10 @@ import platform
 import re
 from typing import Any, Dict, List
 
+try:
+    from security.permissions import PermissionLevel
+except (ImportError, ValueError):
+    from jarvis.security.permissions import PermissionLevel
 from .base import BasePlugin, PluginExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -41,6 +45,15 @@ class DesktopAutomationPlugin(BasePlugin):
     @property
     def supported_intents(self) -> List[str]:
         return ["get_active_window", "click_ui_control", "type_text", "press_hotkey"]
+
+    @property
+    def required_permissions(self) -> Dict[str, PermissionLevel]:
+        return {
+            "get_active_window": PermissionLevel.READ_ONLY,
+            "click_ui_control": PermissionLevel.STANDARD,
+            "type_text": PermissionLevel.STANDARD,
+            "press_hotkey": PermissionLevel.STANDARD,
+        }
 
     def _desktop(self):
         if platform.system() != "Windows":
