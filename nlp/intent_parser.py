@@ -70,11 +70,13 @@ class IntentParser:
         confidence_threshold: float = 0.65,
         llm_router=None,
         command_registry=None,
+        assistant_memory=None,
     ):
         self.predictor = predictor or IntentPredictor(confidence_threshold=confidence_threshold)
         self.confidence_mgr = ConfidenceManager(threshold=confidence_threshold)
         self.llm_router = llm_router
         self.command_registry = command_registry
+        self.assistant_memory = assistant_memory
 
     def normalize(self, text: str) -> str:
         """Strips assistant wake name and conversational prefixes."""
@@ -293,7 +295,8 @@ class IntentParser:
             return None
         try:
             allowed = self.command_registry.all_intents() if self.command_registry is not None else {}
-            result = self.llm_router.interpret(normalized)
+            history = self.assistant_memory.recent_messages("default", limit=8) if self.assistant_memory is not None else []
+            result = self.llm_router.interpret(normalized, history=history)
             # Do not let the model invent dictated text or an application/control target.
             if result.mode == "action_request" and result.intent == "type_text":
                 spoken_text = raw_text.strip()
