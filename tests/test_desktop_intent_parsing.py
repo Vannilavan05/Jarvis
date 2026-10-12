@@ -56,6 +56,6 @@ def test_explicit_desktop_commands_bypass_legacy_model():
     assert (typed.intent, typed.parameters["text"]) == ("type_text", "Hello World")
     assert (opened.intent, opened.parameters["application"]) == ("open_application", "Paint")
     assert clicked.intent == "click_ui_control"
-    assert clicked.parameters == {"control_name": "save", "control_type": "Button"}
+    assert clicked.parameters == {"control_name": "Save", "control_type": "Button"}
     assert (hotkey.intent, hotkey.parameters["keys"]) == ("press_hotkey", "ctrl+s")
     assert active.intent == "get_active_window"
