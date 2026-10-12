@@ -181,7 +181,8 @@ class IntentParser:
 
         click_match = re.fullmatch(
             r"(?:click|select)\s+(?:the\s+)?(.+?)(?:\s+(button|menu item|tab|checkbox|radio button|link|list item))?",
-            normalized,
+            original_command,
+            flags=re.IGNORECASE,
         )
         if click_match:
             control_name = click_match.group(1).strip()
@@ -198,7 +199,7 @@ class IntentParser:
                     confidence=1.0, raw_text=raw_text, model_version=None,
                 )
 
-        open_match = re.fullmatch(r"(?:open|launch|start|run)\s+(?:the\s+)?(.+)", normalized)
+        open_match = re.fullmatch(r"(?:open|launch|start|run)\s+(?:the\s+)?(.+)", original_command, flags=re.IGNORECASE)
         if open_match:
             application = open_match.group(1).strip()
             if application:
