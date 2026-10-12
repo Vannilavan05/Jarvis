@@ -59,10 +59,10 @@ class AutomationEngine:
         task_id = self.memory.create_task(title, validated)
         return self._run(task_id, dispatch)
 
-    def resume(self, dispatch: Callable[[CommandObject], Any], confirmed_pending_step: bool = False) -> Dict[str, Any]:
-        """Resume the newest task paused for confirmation or interrupted mid-run."""
+    def resume(self, dispatch: Callable[[CommandObject], Any], confirmed_pending_step: bool = False, task_id: int = None) -> Dict[str, Any]:
+        """Resume a specific paused task or the newest interrupted task."""
         candidates = self.memory.pending_tasks()
-        task = next((item for item in candidates if item["status"] in {"waiting_confirmation", "running", "planned"}), None)
+        task = next((item for item in candidates if (task_id is None or item["id"] == task_id) and item["status"] in {"waiting_confirmation", "running", "planned"}), None)
         if task is None:
             return {"success": True, "message": "There is no paused automation task to resume."}
         full = self.memory.get_task(task["id"])
