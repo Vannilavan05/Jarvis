@@ -59,6 +59,12 @@ class CommandRegistry:
         self.register("open_application", "Opens an approved application", ["application"], PermissionLevel.STANDARD)
         self.register("close_application", "Terminates an application process", ["application"], PermissionLevel.DESTRUCTIVE, True)
 
+        # App-agnostic Windows desktop UI Automation
+        self.register("get_active_window", "Identifies the currently focused application window", [], PermissionLevel.READ_ONLY)
+        self.register("click_ui_control", "Clicks a uniquely named accessible control in the active window", ["control_name"], PermissionLevel.STANDARD, True)
+        self.register("type_text", "Types user-provided text into the verified focused control", ["text"], PermissionLevel.STANDARD)
+        self.register("press_hotkey", "Presses a permitted keyboard shortcut in the active window", ["keys"], PermissionLevel.STANDARD)
+
         # Web
         self.register("web_search", "Performs a web search via default browser", ["query"], PermissionLevel.STANDARD)
 
