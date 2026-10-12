@@ -211,7 +211,7 @@ class IntentParser:
                 )
 
         # Persistent memory and progress commands are deterministic and voice-first.
-        remember_match = re.fullmatch(r"remember(?: that)?\\s+(.+)", original_command, re.IGNORECASE)
+        remember_match = re.fullmatch(r"remember(?: that)?\s+(.+)", original_command, re.IGNORECASE)
         if remember_match:
             fact = remember_match.group(1).strip()
             key_slug = re.sub(r"[^a-z0-9]+", "_", fact.lower()).strip("_")[:72] or "user_note"
@@ -227,7 +227,7 @@ class IntentParser:
 
         # Explicit multi-step requests must go through the local planner; never silently
         # reduce a compound request to one guessed action from the legacy classifier.
-        if re.search(r"\\b(?:automate|then|after that|and then|step by step)\\b", normalized):
+        if re.search(r"\b(?:automate|then|after that|and then|step by step)\b", normalized):
             planned = self._try_local_llm(raw_text, normalized)
             if planned is not None and planned.intent == "run_automation":
                 return planned
